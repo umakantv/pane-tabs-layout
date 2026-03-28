@@ -1,0 +1,252 @@
+/* Pane Tabs Layout - Core Styles */
+
+/* Layout Container */
+.ptl-layout {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Pane Styles */
+.ptl-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--ptl-bg-color, #1e1e1e);
+  color: var(--ptl-text-color, #cccccc);
+}
+
+.ptl-pane-drag-over {
+  background-color: var(--ptl-drag-over-bg, rgba(0, 122, 204, 0.1));
+}
+
+/* Tab Bar */
+.ptl-tab-bar {
+  display: flex;
+  align-items: stretch;
+  background-color: var(--ptl-tab-bar-bg, #252526);
+  border-bottom: 1px solid var(--ptl-border-color, #3c3c3c);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ptl-scrollbar-thumb, #424242) transparent;
+}
+
+.ptl-tab-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.ptl-tab-bar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ptl-tab-bar::-webkit-scrollbar-thumb {
+  background-color: var(--ptl-scrollbar-thumb, #424242);
+  border-radius: 2px;
+}
+
+/* Tab */
+.ptl-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  min-width: 120px;
+  max-width: 200px;
+  cursor: pointer;
+  user-select: none;
+  background-color: var(--ptl-tab-bg, #2d2d2d);
+  color: var(--ptl-tab-text, #969696);
+  border-right: 1px solid var(--ptl-border-color, #3c3c3c);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  position: relative;
+  font-size: 13px;
+}
+
+.ptl-tab:hover {
+  background-color: var(--ptl-tab-hover-bg, #2a2d2e);
+  color: var(--ptl-tab-hover-text, #cccccc);
+}
+
+.ptl-tab-active {
+  background-color: var(--ptl-tab-active-bg, #1e1e1e);
+  color: var(--ptl-tab-active-text, #ffffff);
+  border-bottom: 1px solid var(--ptl-tab-active-border, #007acc);
+  margin-bottom: -1px;
+}
+
+.ptl-tab-dragging {
+  opacity: 0.5;
+}
+
+.ptl-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ptl-tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptl-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.ptl-tab:hover .ptl-tab-close,
+.ptl-tab-active .ptl-tab-close {
+  opacity: 0.8;
+}
+
+.ptl-tab-close:hover {
+  background-color: var(--ptl-close-hover-bg, #c75450);
+  color: var(--ptl-close-hover-text, #ffffff);
+  opacity: 1;
+}
+
+/* Drop Indicator */
+.ptl-drop-indicator {
+  width: 2px;
+  height: 24px;
+  background-color: var(--ptl-drop-indicator-color, #007acc);
+  margin: 0 2px;
+  border-radius: 1px;
+  animation: ptl-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes ptl-pulse {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Pane Content */
+.ptl-pane-content {
+  flex: 1;
+  overflow: auto;
+  padding: var(--ptl-content-padding, 0);
+}
+
+.ptl-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ptl-empty-state-color, #6e6e6e);
+  font-size: 14px;
+}
+
+/* Collapsed Pane Styles */
+.ptl-pane-collapsed {
+  background-color: var(--ptl-tab-bar-bg, #252526);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+}
+
+.ptl-collapsed-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  color: var(--ptl-tab-text, #969696);
+  font-size: 12px;
+  width: 100%;
+  height: 100%;
+}
+
+.ptl-collapsed-label {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.ptl-drop-zone-active {
+  margin-top: 8px;
+  padding: 8px 16px;
+  background-color: var(--ptl-drop-indicator-color, #007acc);
+  color: white;
+  border-radius: 4px;
+  font-weight: 500;
+  animation: ptl-pulse 0.5s ease-in-out infinite alternate;
+}
+
+/* CSS Variables for theming */
+:root {
+  /* Background colors */
+  --ptl-bg-color: #1e1e1e;
+  --ptl-tab-bar-bg: #252526;
+  --ptl-tab-bg: #2d2d2d;
+  --ptl-tab-hover-bg: #2a2d2e;
+  --ptl-tab-active-bg: #1e1e1e;
+  
+  /* Text colors */
+  --ptl-text-color: #cccccc;
+  --ptl-tab-text: #969696;
+  --ptl-tab-hover-text: #cccccc;
+  --ptl-tab-active-text: #ffffff;
+  
+  /* Border colors */
+  --ptl-border-color: #3c3c3c;
+  --ptl-tab-active-border: #007acc;
+  
+  /* Accent colors */
+  --ptl-drop-indicator-color: #007acc;
+  --ptl-drag-over-bg: rgba(0, 122, 204, 0.1);
+  
+  /* Close button */
+  --ptl-close-hover-bg: #c75450;
+  --ptl-close-hover-text: #ffffff;
+  
+  /* Scrollbar */
+  --ptl-scrollbar-thumb: #424242;
+  
+  /* Content */
+  --ptl-content-padding: 0;
+  --ptl-empty-state-color: #6e6e6e;
+}
+
+/* Light theme support */
+[data-theme="light"] {
+  --ptl-bg-color: #ffffff;
+  --ptl-tab-bar-bg: #f3f3f3;
+  --ptl-tab-bg: #ececec;
+  --ptl-tab-hover-bg: #e8e8e8;
+  --ptl-tab-active-bg: #ffffff;
+  
+  --ptl-text-color: #333333;
+  --ptl-tab-text: #666666;
+  --ptl-tab-hover-text: #333333;
+  --ptl-tab-active-text: #333333;
+  
+  --ptl-border-color: #e0e0e0;
+  --ptl-tab-active-border: #007acc;
+  
+  --ptl-drag-over-bg: rgba(0, 122, 204, 0.05);
+  
+  --ptl-scrollbar-thumb: #c1c1c1;
+  
+  --ptl-empty-state-color: #999999;
+}

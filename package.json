@@ -7,7 +7,9 @@
   "files": [
     "dist"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css"
+  ],
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
@@ -16,10 +18,19 @@
     "test:ui": "vitest --ui",
     "type-check": "tsc --noEmit --skipLibCheck"
   },
-  "keywords": [],
+  "keywords": [
+    "react",
+    "split-pane",
+    "tabs",
+    "layout",
+    "allotment",
+    "drag-and-drop",
+    "pane",
+    "resizable"
+  ],
   "author": "umakantv",
   "license": "ISC",
-  "description": "",
+  "description": "A React component library for creating split pane layouts with draggable tabs, similar to LeetCode and VS Code.",
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -32,5 +43,20 @@
     "vite": "^8.0.3",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "allotment": "^1.20.5"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": false
+    },
+    "react-dom": {
+      "optional": false
+    }
   }
 }
