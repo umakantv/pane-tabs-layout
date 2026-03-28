@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+coverage/
+.eslintcache
+*.rpt2.cache/
+.vscode/
+.idea/
+*.swp
+*.swo
