@@ -16,6 +16,24 @@
   color: var(--ptl-text-color, #cccccc);
 }
 
+/* Split pane content wrapper - ensures proper sizing for scrolling */
+.ptl-split-pane-content {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure allotment's internal view fills the container */
+.ptl-split-pane-content > .split-view-view,
+.ptl-split-pane-content > [class*="split-view-view"] {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .ptl-pane-drag-over {
   background-color: var(--ptl-drag-over-bg, rgba(0, 122, 204, 0.1));
 }
@@ -249,4 +267,92 @@
   --ptl-scrollbar-thumb: #c1c1c1;
   
   --ptl-empty-state-color: #999999;
+}
+
+/* Drop Zone Overlays */
+.ptl-pane {
+  position: relative;
+}
+
+.ptl-pane-split-preview {
+  position: relative;
+}
+
+.ptl-drop-zone-overlay {
+  position: absolute;
+  background-color: var(--ptl-drop-zone-bg, rgba(0, 122, 204, 0.3));
+  border: 2px solid var(--ptl-drop-zone-border, #007acc);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: ptl-drop-zone-fade-in 0.15s ease-out;
+}
+
+@keyframes ptl-drop-zone-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ptl-drop-zone-overlay-left {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  border-right: 4px solid var(--ptl-drop-zone-border, #007acc);
+}
+
+.ptl-drop-zone-overlay-right {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  border-left: 4px solid var(--ptl-drop-zone-border, #007acc);
+}
+
+.ptl-drop-zone-overlay-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  border-bottom: 4px solid var(--ptl-drop-zone-border, #007acc);
+}
+
+.ptl-drop-zone-overlay-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  border-top: 4px solid var(--ptl-drop-zone-border, #007acc);
+}
+
+.ptl-drop-zone-label {
+  background-color: var(--ptl-drop-zone-label-bg, rgba(0, 122, 204, 0.9));
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Additional CSS Variables */
+:root {
+  --ptl-drop-zone-bg: rgba(0, 122, 204, 0.2);
+  --ptl-drop-zone-border: #007acc;
+  --ptl-drop-zone-label-bg: rgba(0, 122, 204, 0.9);
+}
+
+[data-theme="light"] {
+  --ptl-drop-zone-bg: rgba(0, 122, 204, 0.15);
+  --ptl-drop-zone-border: #007acc;
+  --ptl-drop-zone-label-bg: rgba(0, 122, 204, 0.9);
 }

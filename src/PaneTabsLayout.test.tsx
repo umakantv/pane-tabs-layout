@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PaneTabsLayout } from './PaneTabsLayout';
 import type { TabData, LayoutConfig } from './types';
 
@@ -83,7 +83,7 @@ describe('PaneTabsLayout', () => {
     expect(screen.getByTestId('tab2-content')).toBeInTheDocument();
   });
 
-  it('calls onLayoutChange when layout changes', () => {
+  it('calls onLayoutChange when layout changes', async () => {
     const onLayoutChange = vi.fn();
     
     render(
@@ -97,8 +97,10 @@ describe('PaneTabsLayout', () => {
     // Click on Tab 2 to change active tab
     fireEvent.click(screen.getByText('Tab 2'));
     
-    // onLayoutChange should be called
-    expect(onLayoutChange).toHaveBeenCalled();
+    // onLayoutChange should be called (async via setTimeout)
+    await waitFor(() => {
+      expect(onLayoutChange).toHaveBeenCalled();
+    });
   });
 
   it('renders with custom className', () => {

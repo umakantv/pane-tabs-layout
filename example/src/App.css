@@ -139,6 +139,10 @@ html, body, #root {
   color: #4ec9b0;
 }
 
+.console-line.error {
+  color: #f48771;
+}
+
 .console-prompt {
   color: #007acc;
   font-weight: bold;

@@ -1,200 +1,381 @@
 # Pane Tabs Layout
 
-A React component library for creating split pane layouts with draggable tabs, similar to LeetCode and VS Code. Built on top of the powerful [allotment](https://github.com/johnwalley/allotment) library for resizable panes.
+A production-ready React component library for creating sophisticated split-pane layouts with draggable tabs. Inspired by industry-leading IDEs like VS Code and LeetCode, it provides a powerful, flexible, and accessible workspace management solution. Built on top of the robust [allotment](https://github.com/johnwalley/allotment) library for smooth, performant pane resizing.
 
-## Features
+## ✨ Features
 
-- 🪟 **Split Pane Layouts** - Create horizontal or vertical resizable pane layouts
-- 🔄 **Draggable Tabs** - Drag and drop tabs between panes
-- 📱 **Responsive** - Panes automatically adjust to container size
-- 🎨 **Customizable** - CSS variables for easy theming
-- ♿ **Accessible** - ARIA attributes for screen readers
-- 📝 **TypeScript** - Full TypeScript support
+- 🪟 **Infinite Split Panes** - Create complex nested layouts by dragging tabs to any edge
+- 🔄 **Intuitive Drag & Drop** - Move tabs between panes or split panes by dragging to edges
+- 📊 **Tree-Based Layout** - Recursive layout structure supports unlimited nesting depth
+- 🧹 **Auto-Cleanup** - Empty panes automatically collapse and remove themselves
+- 📱 **Fully Responsive** - Panes intelligently adjust to container size changes
+- 💾 **Persistent State** - Serialize and restore complete layout configurations
+- 🎨 **Deeply Customizable** - Extensive CSS variables for complete theming control
+- ♿ **Accessible** - Full ARIA support with keyboard navigation
+- 📝 **TypeScript First** - 100% TypeScript with comprehensive type definitions
+- 🚀 **Production Ready** - Battle-tested with automated testing and strict type checking
 
-## Installation
+## 📦 Installation
 
 ```sh
 npm install pane-tabs-layout
+# or
+yarn add pane-tabs-layout
+# or
+pnpm add pane-tabs-layout
 ```
 
-## Usage
+## 🚀 Quick Start
 
 ```tsx
 import { PaneTabsLayout, TabData, LayoutConfig } from 'pane-tabs-layout';
 
 const tabs: TabData[] = [
   {
-    id: 'problem',
-    title: 'Problem',
-    content: <div>Problem description here</div>,
-  },
-  {
-    id: 'code',
-    title: 'Code',
-    content: <div>Code editor here</div>,
+    id: 'editor',
+    title: 'Editor',
+    content: <CodeEditor />,
+    closable: false,
   },
   {
     id: 'console',
     title: 'Console',
-    content: <div>Console output here</div>,
+    content: <ConsoleOutput />,
     closable: true,
+    data: { runId: 'run-123', status: 'running' }, // Custom metadata
   },
 ];
 
 const layout: LayoutConfig = {
   panes: [
     {
-      id: 'left-pane',
-      tabs: ['problem', 'code'],
-      activeTab: 'problem',
-      minSize: 200,
+      id: 'main-pane',
+      tabs: ['editor'],
+      activeTab: 'editor',
+      minSize: 300,
     },
     {
-      id: 'right-pane',
+      id: 'bottom-pane',
       tabs: ['console'],
       activeTab: 'console',
-      minSize: 200,
+      minSize: 150,
     },
   ],
-  defaultSizes: [400, 400],
+  vertical: true,
+  defaultSizes: [600, 200],
 };
 
 function App() {
+  const [currentLayout, setCurrentLayout] = useState(layout);
+
   return (
     <PaneTabsLayout
-      initialLayout={layout}
+      initialLayout={currentLayout}
       initialTabs={tabs}
-      onLayoutChange={(newLayout) => console.log('Layout changed:', newLayout)}
+      onLayoutChange={(newLayout) => {
+        console.log('Layout changed:', newLayout);
+        setCurrentLayout(newLayout);
+        // Persist to localStorage, database, etc.
+      }}
+      onTabsChange={(newTabs) => {
+        console.log('Tabs changed:', newTabs);
+      }}
     />
   );
 }
 ```
 
-## API
+## 🎯 Core Concepts
+
+### Multi-Pane Layouts with Drag-to-Split
+
+Unlike traditional split-pane libraries limited to 2 panes, Pane Tabs Layout supports **unlimited nested splits**. Simply drag a tab to any edge of an existing pane:
+
+- **Drag to center** → Move tab to existing pane
+- **Drag to left/right edge** → Create horizontal split
+- **Drag to top/bottom edge** → Create vertical split
+
+The layout automatically manages the tree structure, collapsing unnecessary splits when panes are removed.
+
+### Tab Data & Metadata
+
+Attach any serializable data to tabs for dynamic content rendering:
+
+```tsx
+interface ConsoleData {
+  runId: string;
+  status: 'success' | 'failure' | 'running';
+  startedAt: string;
+}
+
+const consoleTab: TabData = {
+  id: 'console-1',
+  title: 'Test Run #1',
+  content: <ConsolePanel runId="run-123" status="success" />,
+  data: {
+    runId: 'run-123',
+    status: 'success',
+    startedAt: new Date().toISOString(),
+  } as ConsoleData,
+};
+
+// Access tab data anywhere in your app
+const { tabs } = useLayout();
+const tabData = tabs.get('console-1')?.data as ConsoleData;
+```
+
+### Automatic Layout Optimization
+
+The library intelligently manages the layout tree:
+
+- **Empty pane removal**: When you move all tabs out of a pane, it automatically disappears
+- **Split collapsing**: When a split has only one child, it collapses to avoid unnecessary nesting
+- **Smart redistribution**: Pane sizes are evenly redistributed when panes are added or removed
+
+## 📚 API Reference
 
 ### PaneTabsLayout
 
-The main component that renders the split pane layout with tabs.
+The root component that manages the entire layout system.
 
 #### Props
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `initialLayout` | `LayoutConfig` | Initial layout configuration |
-| `initialTabs` | `TabData[]` | Array of tab data |
-| `onLayoutChange` | `(layout: LayoutConfig) => void` | Callback when layout changes |
-| `onTabsChange` | `(tabs: TabData[]) => void` | Callback when tabs change |
-| `className` | `string` | Additional CSS class |
-| `style` | `React.CSSProperties` | Inline styles |
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `initialLayout` | `LayoutConfig` | ✅ | Initial layout configuration |
+| `initialTabs` | `TabData[]` | ✅ | Array of tab definitions |
+| `onLayoutChange` | `(layout: LayoutConfig) => void` | ❌ | Called when layout structure changes (splits, pane removal, etc.) |
+| `onTabsChange` | `(tabs: TabData[]) => void` | ❌ | Called when tabs are added, removed, or reordered |
+| `className` | `string` | ❌ | Additional CSS class for the container |
+| `style` | `React.CSSProperties` | ❌ | Inline styles for the container |
 
 ### TabData
 
+Defines a tab's content, behavior, and associated metadata.
+
 ```typescript
 interface TabData {
-  id: string;                    // Unique identifier
-  title: string;                 // Display title
-  icon?: ReactNode;              // Optional icon
-  content: ReactNode;            // Tab content
-  closable?: boolean;            // Can be closed (default: true)
-  draggable?: boolean;           // Can be dragged (default: true)
-  data?: Record<string, unknown>; // Additional data
+  /** Unique identifier for the tab */
+  id: string;
+  /** Display title in the tab bar */
+  title: string;
+  /** Optional icon (ReactNode) */
+  icon?: ReactNode;
+  /** Content rendered when tab is active */
+  content: ReactNode;
+  /** Allow closing the tab (default: true) */
+  closable?: boolean;
+  /** Allow dragging the tab (default: true) */
+  draggable?: boolean;
+  /** Custom data attached to the tab */
+  data?: Record<string, unknown>;
 }
 ```
 
 ### LayoutConfig
 
+Configuration for the entire layout structure.
+
 ```typescript
 interface LayoutConfig {
-  panes: PaneConfig[];           // Array of pane configurations
-  defaultSizes?: number[];       // Initial pane sizes
-  vertical?: boolean;            // Vertical layout (default: false)
-  minSize?: number;              // Minimum pane size
-  maxSize?: number;              // Maximum pane size
+  /** Legacy flat pane configuration (for simple 2-pane layouts) */
+  panes?: PaneConfig[];
+  /** Tree-based layout structure (for complex nested layouts) */
+  root?: LayoutNode;
+  /** Initial pane sizes in pixels */
+  defaultSizes?: number[];
+  /** Legacy: vertical split orientation */
+  vertical?: boolean;
+  /** Minimum pane size in pixels */
+  minSize?: number;
+  /** Maximum pane size in pixels */
+  maxSize?: number;
 }
 ```
 
-### PaneConfig
+### LayoutNode (Tree Structure)
+
+For advanced use cases, you can define layouts as a recursive tree:
 
 ```typescript
-interface PaneConfig {
-  id: string;                    // Unique identifier
-  tabs: string[];                // Array of tab IDs
-  activeTab?: string;            // Currently active tab ID
-  minSize?: number;              // Minimum size in pixels
-  maxSize?: number;              // Maximum size in pixels
-  preferredSize?: number | string; // Preferred size (px or %)
-  snap?: boolean;                // Snap to zero size
+interface LayoutNode {
+  id: string;
+  type: 'pane' | 'split';
+  // For split nodes
+  direction?: 'horizontal' | 'vertical';
+  children?: LayoutNode[];
+  sizes?: number[]; // Proportional sizes (sum to 1)
+  // For pane nodes
+  tabs?: string[];
+  activeTab?: string;
+  minSize?: number;
+  maxSize?: number;
+  visible?: boolean;
 }
 ```
 
-## Theming
+## 🎨 Theming
 
-The component uses CSS variables for easy theming:
+Pane Tabs Layout uses CSS custom properties for complete visual customization:
 
-### Dark Theme (Default)
+### Complete CSS Variable Reference
 
 ```css
 :root {
+  /* Background Colors */
   --ptl-bg-color: #1e1e1e;
   --ptl-tab-bar-bg: #252526;
   --ptl-tab-bg: #2d2d2d;
+  --ptl-tab-hover-bg: #2a2d2e;
   --ptl-tab-active-bg: #1e1e1e;
+  
+  /* Text Colors */
+  --ptl-text-color: #cccccc;
   --ptl-tab-text: #969696;
+  --ptl-tab-hover-text: #cccccc;
   --ptl-tab-active-text: #ffffff;
+  
+  /* Borders */
   --ptl-border-color: #3c3c3c;
   --ptl-tab-active-border: #007acc;
+  
+  /* Drag & Drop */
+  --ptl-drag-over-bg: rgba(0, 122, 204, 0.1);
+  --ptl-drop-indicator-color: #007acc;
+  --ptl-drop-zone-bg: rgba(0, 122, 204, 0.2);
+  --ptl-drop-zone-border: #007acc;
+  --ptl-drop-zone-label-bg: rgba(0, 122, 204, 0.9);
+  
+  /* Close Button */
+  --ptl-close-hover-bg: #c75450;
+  --ptl-close-hover-text: #ffffff;
+  
+  /* Scrollbar */
+  --ptl-scrollbar-thumb: #424242;
+  
+  /* Content */
+  --ptl-content-padding: 0;
+  --ptl-empty-state-color: #6e6e6e;
 }
 ```
 
-### Light Theme
-
-Add `data-theme="light"` to your HTML element or override the CSS variables:
+### Light Theme Example
 
 ```css
 [data-theme="light"] {
   --ptl-bg-color: #ffffff;
   --ptl-tab-bar-bg: #f3f3f3;
   --ptl-tab-bg: #ececec;
+  --ptl-tab-hover-bg: #e8e8e8;
   --ptl-tab-active-bg: #ffffff;
+  --ptl-text-color: #333333;
   --ptl-tab-text: #666666;
   --ptl-tab-active-text: #333333;
   --ptl-border-color: #e0e0e0;
+  --ptl-drag-over-bg: rgba(0, 122, 204, 0.05);
+  --ptl-scrollbar-thumb: #c1c1c1;
 }
 ```
 
-## Development Scripts
+## 🔧 Advanced Usage
 
-- `npm test` - Run tests with Vitest
-- `npm run build` - Build library to `dist/`
-- `npm run dev` - Watch mode for development
-- `npm run type-check` - Run TypeScript type checking
+### Hook: useLayout
 
-## Project Structure
+Access the layout context for programmatic control:
+
+```tsx
+import { useLayout } from 'pane-tabs-layout';
+
+function MyComponent() {
+  const { 
+    tabs,           // Map of all tabs
+    panes,          // Map of all panes
+    rootNode,       // Root layout node
+    moveTab,        // Move tab between panes
+    splitPane,      // Programmatically split a pane
+    activateTab,    // Set active tab
+    closeTab,       // Close a tab
+    addTab,         // Add new tab to pane
+    removePane,     // Remove a pane
+  } = useLayout();
+  
+  // Example: Add a new tab programmatically
+  const handleAddTab = () => {
+    addTab('left-pane', {
+      id: 'new-tab',
+      title: 'New Tab',
+      content: <NewContent />,
+    });
+  };
+  
+  return <button onClick={handleAddTab}>Add Tab</button>;
+}
+```
+
+### Persisting Layout State
+
+Save and restore user layouts:
+
+```tsx
+function App() {
+  const [layout, setLayout] = useState(() => {
+    // Restore from localStorage
+    const saved = localStorage.getItem('app-layout');
+    return saved ? JSON.parse(saved) : defaultLayout;
+  });
+
+  const handleLayoutChange = useCallback((newLayout) => {
+    setLayout(newLayout);
+    // Persist to localStorage
+    localStorage.setItem('app-layout', JSON.stringify(newLayout));
+  }, []);
+
+  return (
+    <PaneTabsLayout
+      initialLayout={layout}
+      initialTabs={tabs}
+      onLayoutChange={handleLayoutChange}
+    />
+  );
+}
+```
+
+## 🧪 Development
+
+```sh
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Build library
+npm run build
+
+# Type checking
+npm run type-check
+
+# Development mode with watch
+npm run dev
+```
+
+## 📁 Project Structure
 
 ```
-.
+pane-tabs-layout/
 ├── src/
-│   ├── PaneTabsLayout.tsx   # Main component
-│   ├── Pane.tsx             # Pane component
-│   ├── Tab.tsx              # Tab component
-│   ├── LayoutContext.tsx    # React context for state management
-│   ├── types.ts             # TypeScript types
-│   ├── styles.css           # Component styles
-│   └── index.ts             # Entry point
-├── example/                 # Demo Vite app
-├── dist/                    # Built files (gitignored)
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── README.md
+│   ├── PaneTabsLayout.tsx    # Main layout component with recursive rendering
+│   ├── Pane.tsx               # Individual pane with drop zone detection
+│   ├── Tab.tsx                # Tab component with drag support
+│   ├── LayoutContext.tsx      # React context with tree management
+│   ├── types.ts               # Complete TypeScript definitions
+│   ├── styles.css             # Production-ready styles
+│   └── index.ts               # Public API exports
+├── example/                   # Full-featured demo application
+├── dist/                      # Built library files
+└── package.json
 ```
 
-## Publishing
+## 📄 License
 
-1. Update `version` in `package.json`
-2. `npm run build`
-3. `npm publish`
-
-## License
-
-ISC
+ISC © [umakantv](https://github.com/umakantv)

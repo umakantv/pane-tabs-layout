@@ -11,10 +11,15 @@ export { LayoutProvider, useLayout } from './LayoutContext';
 // Types
 export type {
   Id,
+  SplitDirection,
+  SplitOrientation,
+  LayoutNodeType,
   TabData,
   PaneConfig,
   LayoutConfig,
+  LayoutNode,
   DragData,
+  DropZoneInfo,
   LayoutContextValue,
   PaneTabsLayoutProps,
   TabProps,

@@ -35,26 +35,78 @@ const CodeContent = () => (
   </div>
 );
 
-const ConsoleContent = () => (
-  <div className="content-panel console-panel">
-    <div className="console-line">
-      <span className="console-prompt">&gt;</span>
-      <span>Running test cases...</span>
+// Console data type for tab data
+interface ConsoleData {
+  runId: string;
+  status: 'success' | 'failure' | 'running';
+  startedAt: string;
+  completedAt?: string;
+}
+
+// Dynamic console content that receives data via props
+const ConsoleContent = ({ runId, status, startedAt, completedAt }: ConsoleData) => {
+  const isSuccess = status === 'success';
+  const isFailure = status === 'failure';
+  
+  return (
+    <div className="content-panel console-panel">
+      <div className="console-line">
+        <span className="console-prompt">&gt;</span>
+        <span>Run ID: {runId}</span>
+      </div>
+      <div className="console-line">
+        <span className="console-prompt">&gt;</span>
+        <span>Started: {new Date(startedAt).toLocaleTimeString()}</span>
+      </div>
+      {completedAt && (
+        <div className="console-line">
+          <span className="console-prompt">&gt;</span>
+          <span>Completed: {new Date(completedAt).toLocaleTimeString()}</span>
+        </div>
+      )}
+      <div className="console-line">
+        <span className="console-prompt">&gt;</span>
+        <span>Status: {status.toUpperCase()}</span>
+      </div>
+      <div className="console-line">
+        <span className="console-prompt">&gt;</span>
+        <span>Running test cases...</span>
+      </div>
+      {isSuccess && (
+        <>
+          <div className="console-line success">
+            <span className="console-prompt">✓</span>
+            <span>Test case 1 passed (2ms)</span>
+          </div>
+          <div className="console-line success">
+            <span className="console-prompt">✓</span>
+            <span>Test case 2 passed (1ms)</span>
+          </div>
+          <div className="console-line success">
+            <span className="console-prompt">✓</span>
+            <span>All tests passed!</span>
+          </div>
+        </>
+      )}
+      {isFailure && (
+        <>
+          <div className="console-line error">
+            <span className="console-prompt">✗</span>
+            <span>Test case 1 failed (2ms)</span>
+          </div>
+          <div className="console-line error">
+            <span className="console-prompt">✗</span>
+            <span>Error: Expected [0,1] but got [1,0]</span>
+          </div>
+          <div className="console-line">
+            <span className="console-prompt">&gt;</span>
+            <span>2 tests failed, 0 passed</span>
+          </div>
+        </>
+      )}
     </div>
-    <div className="console-line success">
-      <span className="console-prompt">✓</span>
-      <span>Test case 1 passed (2ms)</span>
-    </div>
-    <div className="console-line success">
-      <span className="console-prompt">✓</span>
-      <span>Test case 2 passed (1ms)</span>
-    </div>
-    <div className="console-line">
-      <span className="console-prompt">&gt;</span>
-      <span>All tests passed!</span>
-    </div>
-  </div>
-);
+  );
+};
 
 const NotesContent = () => (
   <div className="content-panel">
@@ -81,7 +133,7 @@ const TestCasesContent = () => (
   </div>
 );
 
-// Initial tabs data
+// Initial tabs data with console tabs having different data
 const initialTabs: TabData[] = [
   {
     id: 'problem',
@@ -96,16 +148,51 @@ const initialTabs: TabData[] = [
     closable: false,
   },
   {
-    id: 'console',
-    title: 'Console',
-    content: <ConsoleContent />,
+    id: 'console-success',
+    title: 'Console (Success)',
+    content: (
+      <ConsoleContent
+        runId="run-success-001"
+        status="success"
+        startedAt="2024-01-15T10:30:00Z"
+        completedAt="2024-01-15T10:30:05Z"
+      />
+    ),
     closable: true,
+    data: {
+      runId: 'run-success-001',
+      status: 'success',
+      jobType: 'test',
+    } as ConsoleData,
+  },
+  {
+    id: 'console-failure',
+    title: 'Console (Failure)',
+    content: (
+      <ConsoleContent
+        runId="run-failure-002"
+        status="failure"
+        startedAt="2024-01-15T10:35:00Z"
+        completedAt="2024-01-15T10:35:03Z"
+      />
+    ),
+    closable: true,
+    data: {
+      runId: 'run-failure-002',
+      status: 'failure',
+      jobType: 'test',
+    } as ConsoleData,
   },
   {
     id: 'notes',
     title: 'Notes',
     content: <NotesContent />,
     closable: true,
+    data: {
+      noteId: 'note-123',
+      author: 'john_doe',
+      createdAt: '2024-01-15',
+    },
   },
   {
     id: 'tests',
@@ -115,7 +202,7 @@ const initialTabs: TabData[] = [
   },
 ];
 
-// Initial layout configuration
+// Initial layout configuration (legacy format - will be converted to tree internally)
 const initialLayout: LayoutConfig = {
   vertical: false,
   defaultSizes: [400, 400],
@@ -128,8 +215,8 @@ const initialLayout: LayoutConfig = {
     },
     {
       id: 'right-pane',
-      tabs: ['console', 'notes', 'tests'],
-      activeTab: 'console',
+      tabs: ['console-success', 'console-failure', 'notes', 'tests'],
+      activeTab: 'console-success',
       minSize: 200,
     },
   ],
@@ -147,7 +234,7 @@ function App() {
     <div className="app-container">
       <header className="app-header">
         <h1>🚀 Pane Tabs Layout Demo</h1>
-        <p>Drag tabs between panes to reorganize your workspace</p>
+        <p>Drag tabs to split panes! Try dragging to the edges of a pane.</p>
       </header>
       
       <main className="app-main">
@@ -161,8 +248,8 @@ function App() {
       
       <footer className="app-footer">
         <p>
-          <strong>Try it:</strong> Drag tabs between the left and right panes. 
-          You can also close tabs with the × button.
+          <strong>Try it:</strong> Drag tabs between panes, or drag to the <strong>edges</strong> of a pane to create new splits!
+          You can create complex layouts with multiple panes. Close tabs with the × button.
         </p>
       </footer>
     </div>
