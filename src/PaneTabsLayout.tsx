@@ -3,31 +3,59 @@ import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
 import { LayoutProvider, useLayout } from './LayoutContext';
 import { Pane } from './Pane';
-import type { PaneTabsLayoutProps } from './types';
+import type { PaneTabsLayoutProps, LayoutNode } from './types';
+
+/**
+ * Recursively render the layout tree
+ */
+const LayoutNodeRenderer: React.FC<{
+  node: LayoutNode;
+  minSize?: number;
+  maxSize?: number;
+}> = ({ node, minSize, maxSize }) => {
+  if (node.type === 'pane') {
+    return <Pane paneId={node.id} />;
+  }
+
+  // It's a split node - render children in an Allotment
+  if (!node.children || node.children.length === 0) {
+    return null;
+  }
+
+  return (
+    <Allotment
+      vertical={node.direction === 'vertical'}
+      minSize={minSize}
+      maxSize={maxSize}
+      defaultSizes={node.sizes}
+    >
+      {node.children.map((child) => (
+        <Allotment.Pane key={child.id}>
+          <div className="ptl-split-pane-content">
+            <LayoutNodeRenderer node={child} minSize={minSize} maxSize={maxSize} />
+          </div>
+        </Allotment.Pane>
+      ))}
+    </Allotment>
+  );
+};
 
 // Inner component that has access to context
 const LayoutContent: React.FC<{
   className: string;
   style?: React.CSSProperties;
-  vertical?: boolean;
   minSize?: number;
   maxSize?: number;
-  defaultSizes?: number[];
-}> = ({ className, style, vertical, minSize, maxSize, defaultSizes }) => {
-  const { panes } = useLayout();
+}> = ({ className, style, minSize, maxSize }) => {
+  const { rootNode } = useLayout();
+
+  if (!rootNode) {
+    return <div className={`ptl-layout ${className}`} style={style}>No layout</div>;
+  }
 
   return (
     <div className={`ptl-layout ${className}`} style={style}>
-      <Allotment
-        vertical={vertical}
-        minSize={minSize}
-        maxSize={maxSize}
-        defaultSizes={defaultSizes}
-      >
-        {Array.from(panes.values()).map((pane) => (
-          <Pane key={pane.id} paneId={pane.id} />
-        ))}
-      </Allotment>
+      <LayoutNodeRenderer node={rootNode} minSize={minSize} maxSize={maxSize} />
     </div>
   );
 };
@@ -50,10 +78,8 @@ export const PaneTabsLayout: React.FC<PaneTabsLayoutProps> = ({
       <LayoutContent
         className={className}
         style={style}
-        vertical={initialLayout.vertical}
         minSize={initialLayout.minSize}
         maxSize={initialLayout.maxSize}
-        defaultSizes={initialLayout.defaultSizes}
       />
     </LayoutProvider>
   );

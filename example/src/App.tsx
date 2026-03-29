@@ -115,7 +115,7 @@ const initialTabs: TabData[] = [
   },
 ];
 
-// Initial layout configuration
+// Initial layout configuration (legacy format - will be converted to tree internally)
 const initialLayout: LayoutConfig = {
   vertical: false,
   defaultSizes: [400, 400],
@@ -147,7 +147,7 @@ function App() {
     <div className="app-container">
       <header className="app-header">
         <h1>🚀 Pane Tabs Layout Demo</h1>
-        <p>Drag tabs between panes to reorganize your workspace</p>
+        <p>Drag tabs to split panes! Try dragging to the edges of a pane.</p>
       </header>
       
       <main className="app-main">
@@ -161,8 +161,8 @@ function App() {
       
       <footer className="app-footer">
         <p>
-          <strong>Try it:</strong> Drag tabs between the left and right panes. 
-          You can also close tabs with the × button.
+          <strong>Try it:</strong> Drag tabs between panes, or drag to the <strong>edges</strong> of a pane to create new splits!
+          You can create complex layouts with multiple panes. Close tabs with the × button.
         </p>
       </footer>
     </div>

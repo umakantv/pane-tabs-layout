@@ -6,6 +6,11 @@ import { ReactNode } from 'react';
 export type Id = string;
 
 /**
+ * Direction for splitting panes
+ */
+export type SplitDirection = 'left' | 'right' | 'top' | 'bottom';
+
+/**
  * Tab data structure
  */
 export interface TabData {
@@ -48,14 +53,54 @@ export interface PaneConfig {
 }
 
 /**
- * Layout configuration
+ * Layout node type - can be either a leaf pane or a split container
+ */
+export type LayoutNodeType = 'pane' | 'split';
+
+/**
+ * Split direction for container nodes
+ */
+export type SplitOrientation = 'horizontal' | 'vertical';
+
+/**
+ * A node in the layout tree - either a pane (leaf) or a split (container)
+ */
+export interface LayoutNode {
+  /** Unique identifier for this node */
+  id: Id;
+  /** Type of node: 'pane' for leaf nodes, 'split' for containers */
+  type: LayoutNodeType;
+  /** For split nodes: orientation of the split */
+  direction?: SplitOrientation;
+  /** For split nodes: child nodes */
+  children?: LayoutNode[];
+  /** For split nodes: proportional sizes of children (sum should be 1) */
+  sizes?: number[];
+  /** For pane nodes: array of tab IDs */
+  tabs?: Id[];
+  /** For pane nodes: currently active tab ID */
+  activeTab?: Id;
+  /** For pane nodes: minimum size in pixels */
+  minSize?: number;
+  /** For pane nodes: maximum size in pixels */
+  maxSize?: number;
+  /** For pane nodes: whether pane is visible */
+  visible?: boolean;
+  /** For pane nodes: snap to zero size */
+  snap?: boolean;
+}
+
+/**
+ * Layout configuration - supports both flat (legacy) and tree (new) structures
  */
 export interface LayoutConfig {
-  /** Array of pane configurations */
-  panes: PaneConfig[];
-  /** Default sizes for the panes */
+  /** Root node of the layout tree (new tree-based structure) */
+  root?: LayoutNode;
+  /** Array of pane configurations (legacy flat structure) */
+  panes?: PaneConfig[];
+  /** Default sizes for the panes (legacy) */
   defaultSizes?: number[];
-  /** Whether the layout is vertical (default: horizontal) */
+  /** Whether the layout is vertical (default: horizontal) - legacy */
   vertical?: boolean;
   /** Minimum size for any pane */
   minSize?: number;
@@ -72,27 +117,45 @@ export interface DragData {
 }
 
 /**
+ * Information about the current drop zone during drag
+ */
+export interface DropZoneInfo {
+  /** The pane being dragged over */
+  paneId: Id;
+  /** The drop zone direction: 'center' for adding to pane, or split direction */
+  direction: SplitDirection | 'center';
+}
+
+/**
  * Context value for the pane-tabs-layout
  */
 export interface LayoutContextValue {
   /** Map of all tabs by ID */
   tabs: Map<Id, TabData>;
-  /** Map of all panes by ID */
+  /** Map of all panes by ID (flat map for easy lookup) */
   panes: Map<Id, PaneConfig>;
+  /** Root node of the layout tree */
+  rootNode: LayoutNode | null;
   /** Move a tab from one pane to another */
   moveTab: (tabId: Id, fromPaneId: Id, toPaneId: Id, targetIndex?: number) => void;
+  /** Split a pane and move a tab from source to the new pane */
+  splitPane: (tabId: Id, sourcePaneId: Id, targetPaneId: Id, direction: SplitDirection) => void;
   /** Activate a tab in a pane */
   activateTab: (paneId: Id, tabId: Id) => void;
   /** Close a tab */
   closeTab: (paneId: Id, tabId: Id) => void;
   /** Add a new tab to a pane */
   addTab: (paneId: Id, tab: TabData, activate?: boolean) => void;
-  /** Remove a pane */
+  /** Remove a pane (merges with sibling if possible) */
   removePane: (paneId: Id) => void;
   /** Current drag data */
   dragData: DragData | null;
   /** Set drag data */
   setDragData: (data: DragData | null) => void;
+  /** Current drop zone info */
+  dropZone: DropZoneInfo | null;
+  /** Set drop zone info */
+  setDropZone: (zone: DropZoneInfo | null) => void;
 }
 
 /**
