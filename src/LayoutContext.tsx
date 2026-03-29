@@ -200,6 +200,60 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
   }, []);
 
   /**
+   * Clean up the tree by removing empty panes and collapsing single-child splits
+   */
+  const cleanupTree = useCallback((node: LayoutNode): LayoutNode => {
+    // If it's a pane, check if it has tabs
+    if (node.type === 'pane') {
+      const tabCount = node.tabs?.length || 0;
+      if (tabCount === 0) {
+        // Return a special marker that this node should be removed
+        // We'll handle this at the parent level
+        return { ...node, _empty: true } as LayoutNode;
+      }
+      return node;
+    }
+
+    // It's a split node - process children
+    if (node.children) {
+      // Recursively clean up children
+      const cleanedChildren = node.children
+        .map(child => cleanupTree(child))
+        .filter(child => {
+          // Filter out empty panes
+          const isEmptyPane = child.type === 'pane' && (child.tabs?.length || 0) === 0;
+          return !isEmptyPane;
+        });
+
+      // If no children remain, create a single empty pane
+      if (cleanedChildren.length === 0) {
+        return {
+          id: generateId('pane'),
+          type: 'pane',
+          tabs: [],
+          visible: true,
+        };
+      }
+
+      // If only one child remains, collapse this split
+      if (cleanedChildren.length === 1) {
+        return cleanedChildren[0];
+      }
+
+      // Redistribute sizes evenly
+      const newSizes = cleanedChildren.map(() => 1 / cleanedChildren.length);
+
+      return {
+        ...node,
+        children: cleanedChildren,
+        sizes: newSizes,
+      };
+    }
+
+    return node;
+  }, []);
+
+  /**
    * Split a pane and move a tab from source to the new pane
    */
   const splitPane = useCallback((tabId: Id, sourcePaneId: Id, targetPaneId: Id, direction: SplitDirection) => {
@@ -281,11 +335,13 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
         return node;
       };
       
-      return insertNode(newRoot);
+      const result = insertNode(newRoot);
+      // Clean up empty panes and collapse single-child splits
+      return cleanupTree(result);
     });
     
     setTimeout(notifyChanges, 0);
-  }, [notifyChanges, updatePaneInTree]);
+  }, [notifyChanges, updatePaneInTree, cleanupTree]);
 
   const moveTab = useCallback(
     (tabId: Id, fromPaneId: Id, toPaneId: Id, targetIndex?: number) => {
@@ -332,13 +388,14 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
             };
           });
           
-          return newRoot;
+          // Clean up empty panes and collapse single-child splits
+          return cleanupTree(newRoot);
         });
       }
 
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, updatePaneInTree]
+    [notifyChanges, updatePaneInTree, cleanupTree]
   );
 
   const activateTab = useCallback(
