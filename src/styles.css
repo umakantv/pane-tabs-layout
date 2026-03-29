@@ -8,16 +8,44 @@
 }
 
 /* Pane Styles */
+
+/* Ensure allotment's inner split-view-view has height so .ptl-pane's height:100% resolves */
+.split-view-view .split-view-view {
+  height: 100%;
+}
+
 .ptl-pane {
   display: flex;
   flex-direction: column;
   height: 100%;
   background-color: var(--ptl-bg-color, #1e1e1e);
   color: var(--ptl-text-color, #cccccc);
+  overflow: hidden; /* clip children to enable inner scroll */
 }
 
 .ptl-pane-drag-over {
   background-color: var(--ptl-drag-over-bg, rgba(0, 122, 204, 0.1));
+}
+
+.ptl-pane-edge-drop {
+  background-color: var(--ptl-edge-drop-bg, rgba(0, 122, 204, 0.15));
+  box-shadow: inset 0 0 0 2px var(--ptl-drop-indicator-color, #007acc);
+}
+
+.ptl-edge-drop-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ptl-edge-drop-text, #007acc);
+  font-size: 14px;
+  gap: 8px;
+}
+
+.ptl-edge-drop-icon {
+  font-size: 32px;
+  opacity: 0.8;
 }
 
 /* Tab Bar */
@@ -143,6 +171,7 @@
 /* Pane Content */
 .ptl-pane-content {
   flex: 1;
+  min-height: 0; /* allow flex child to shrink below content size for scrolling */
   overflow: auto;
   padding: var(--ptl-content-padding, 0);
 }
@@ -193,6 +222,150 @@
   animation: ptl-pulse 0.5s ease-in-out infinite alternate;
 }
 
+/* ============================================
+   VS Code / LeetCode Style Drop Zone Overlay
+   ============================================ */
+
+/* Overlay container - covers the entire layout when dragging */
+.ptl-drop-zone-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Base drop zone styling */
+.ptl-drop-zone {
+  position: absolute;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.ptl-drop-zone-active {
+  background-color: var(--ptl-drop-zone-bg, rgba(0, 122, 204, 0.2));
+}
+
+/* Edge zones - thin strips along the edges (small to not block tab bars) */
+.ptl-drop-zone-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  border-top: 2px solid transparent;
+}
+
+.ptl-drop-zone-top.ptl-drop-zone-active {
+  border-top-color: var(--ptl-drop-indicator-color, #007acc);
+}
+
+.ptl-drop-zone-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  border-bottom: 2px solid transparent;
+}
+
+.ptl-drop-zone-bottom.ptl-drop-zone-active {
+  border-bottom-color: var(--ptl-drop-indicator-color, #007acc);
+}
+
+.ptl-drop-zone-left {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  border-left: 2px solid transparent;
+}
+
+.ptl-drop-zone-left.ptl-drop-zone-active {
+  border-left-color: var(--ptl-drop-indicator-color, #007acc);
+}
+
+.ptl-drop-zone-right {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  border-right: 2px solid transparent;
+}
+
+.ptl-drop-zone-right.ptl-drop-zone-active {
+  border-right-color: var(--ptl-drop-indicator-color, #007acc);
+}
+
+/* Corner zones - 40x40 squares at corners (overlap edges but have higher priority via later DOM order) */
+.ptl-drop-zone-corner {
+  width: 50px;
+  height: 50px;
+  z-index: 101; /* Above edge zones */
+}
+
+.ptl-drop-zone-top-left {
+  top: 0;
+  left: 0;
+  border-top: 2px solid transparent;
+  border-left: 2px solid transparent;
+}
+
+.ptl-drop-zone-top-right {
+  top: 0;
+  right: 0;
+  border-top: 2px solid transparent;
+  border-right: 2px solid transparent;
+}
+
+.ptl-drop-zone-bottom-left {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid transparent;
+  border-left: 2px solid transparent;
+}
+
+.ptl-drop-zone-bottom-right {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid transparent;
+  border-right: 2px solid transparent;
+}
+
+.ptl-drop-zone-corner.ptl-drop-zone-active {
+  background-color: var(--ptl-drop-zone-bg, rgba(0, 122, 204, 0.25));
+}
+
+/* Preview content shown inside an active drop zone */
+.ptl-drop-zone-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--ptl-drop-indicator-color, #007acc);
+  font-size: 12px;
+  font-weight: 500;
+  gap: 4px;
+  text-align: center;
+  padding: 8px;
+  background-color: var(--ptl-drop-zone-preview-bg, rgba(0, 122, 204, 0.15));
+  border-radius: 4px;
+  animation: ptl-pulse 0.5s ease-in-out infinite alternate;
+}
+
+.ptl-drop-zone-preview-icon {
+  font-size: 24px;
+  opacity: 0.9;
+}
+
+.ptl-drop-zone-preview-text {
+  white-space: nowrap;
+}
+
 /* CSS Variables for theming */
 :root {
   /* Background colors */
@@ -215,6 +388,10 @@
   /* Accent colors */
   --ptl-drop-indicator-color: #007acc;
   --ptl-drag-over-bg: rgba(0, 122, 204, 0.1);
+  --ptl-edge-drop-bg: rgba(0, 122, 204, 0.15);
+  --ptl-edge-drop-text: #007acc;
+  --ptl-drop-zone-bg: rgba(0, 122, 204, 0.2);
+  --ptl-drop-zone-preview-bg: rgba(0, 122, 204, 0.15);
   
   /* Close button */
   --ptl-close-hover-bg: #c75450;
@@ -245,6 +422,10 @@
   --ptl-tab-active-border: #007acc;
   
   --ptl-drag-over-bg: rgba(0, 122, 204, 0.05);
+  --ptl-edge-drop-bg: rgba(0, 122, 204, 0.1);
+  --ptl-edge-drop-text: #007acc;
+  --ptl-drop-zone-bg: rgba(0, 122, 204, 0.15);
+  --ptl-drop-zone-preview-bg: rgba(0, 122, 204, 0.1);
   
   --ptl-scrollbar-thumb: #c1c1c1;
   

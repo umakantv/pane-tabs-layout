@@ -6,6 +6,7 @@ import type {
   LayoutConfig,
   DragData,
   LayoutContextValue,
+  CreatePanePosition,
 } from './types';
 
 interface LayoutProviderProps {
@@ -45,13 +46,22 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
     return map;
   });
 
+  // Maintain pane order for rendering (Map iteration order is preserved but we want explicit control)
+  const [paneOrder, setPaneOrder] = useState<Id[]>(() =>
+    initialLayout.panes.map((p) => p.id)
+  );
+
   const [dragData, setDragData] = useState<DragData | null>(null);
 
   const notifyChanges = useCallback(() => {
     if (onLayoutChange) {
+      // Build panes array in order of paneOrder, filtering out deleted panes
+      const panesArray = paneOrder
+        .filter((id) => panesMap.has(id))
+        .map((id) => panesMap.get(id)!);
       const layout: LayoutConfig = {
         ...initialLayout,
-        panes: Array.from(panesMap.values()),
+        panes: panesArray,
       };
       onLayoutChange(layout);
     }
@@ -59,7 +69,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       const tabs = Array.from(tabsMap.values());
       onTabsChange(tabs);
     }
-  }, [panesMap, tabsMap, onLayoutChange, onTabsChange, initialLayout]);
+  }, [panesMap, tabsMap, paneOrder, onLayoutChange, onTabsChange, initialLayout]);
 
   const moveTab = useCallback(
     (tabId: Id, fromPaneId: Id, toPaneId: Id, targetIndex?: number) => {
@@ -182,24 +192,91 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
         newMap.delete(paneId);
         return newMap;
       });
+      // Also remove from paneOrder
+      setPaneOrder((prev) => prev.filter((id) => id !== paneId));
       setTimeout(notifyChanges, 0);
     },
     [notifyChanges]
+  );
+
+  const createPane = useCallback(
+    (tabId: Id, sourcePaneId: Id, position: CreatePanePosition) => {
+      // Generate the new pane ID once so both updates use the same ID
+      const newPaneId = `pane-${Date.now()}`;
+
+      setPanesMap((prev) => {
+        const newMap = new Map(prev);
+        const sourcePane = newMap.get(sourcePaneId);
+        if (!sourcePane) return prev;
+
+        // Remove tab from source pane
+        const newSourceTabs = sourcePane.tabs.filter((id) => id !== tabId);
+        newMap.set(sourcePaneId, {
+          ...sourcePane,
+          tabs: newSourceTabs,
+          activeTab: sourcePane.activeTab === tabId ? newSourceTabs[0] : sourcePane.activeTab,
+          visible: newSourceTabs.length > 0 ? sourcePane.visible : false,
+        });
+
+        // Create new pane
+        newMap.set(newPaneId, {
+          id: newPaneId,
+          tabs: [tabId],
+          activeTab: tabId,
+          visible: true,
+          minSize: initialLayout.minSize ?? 200,
+        });
+
+        return newMap;
+      });
+
+      // Update paneOrder based on position
+      setPaneOrder((prev) => {
+        const sourceIndex = prev.indexOf(sourcePaneId);
+        if (sourceIndex === -1) return prev;
+
+        const newOrder = [...prev];
+
+        // Top positions: always prepend (full-width row above)
+        if (position === 'top' || position === 'top-left' || position === 'top-right') {
+          newOrder.unshift(newPaneId);
+        }
+        // Bottom positions: always append (full-width row below)
+        else if (position === 'bottom' || position === 'bottom-left' || position === 'bottom-right') {
+          newOrder.push(newPaneId);
+        }
+        // Left: insert before source pane (horizontal split)
+        else if (position === 'left') {
+          newOrder.splice(sourceIndex, 0, newPaneId);
+        }
+        // Right: insert after source pane (horizontal split)
+        else {
+          newOrder.splice(sourceIndex + 1, 0, newPaneId);
+        }
+
+        return newOrder;
+      });
+
+      setTimeout(notifyChanges, 0);
+    },
+    [notifyChanges, initialLayout.minSize]
   );
 
   const value = useMemo(
     () => ({
       tabs: tabsMap,
       panes: panesMap,
+      paneOrder,
       moveTab,
       activateTab,
       closeTab,
       addTab,
       removePane,
+      createPane,
       dragData,
       setDragData,
     }),
-    [tabsMap, panesMap, moveTab, activateTab, closeTab, addTab, removePane, dragData]
+    [tabsMap, panesMap, paneOrder, moveTab, activateTab, closeTab, addTab, removePane, createPane, dragData]
   );
 
   return (

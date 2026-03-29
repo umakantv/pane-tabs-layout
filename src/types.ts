@@ -72,6 +72,26 @@ export interface DragData {
 }
 
 /**
+ * Position for creating a new pane via drag-and-drop
+ * Edge positions create full-width/height splits
+ * Corner positions create 2x2 splits at the specified corner
+ */
+export type CreatePanePosition =
+  | 'left'
+  | 'right'
+  | 'top'
+  | 'bottom'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
+
+/**
+ * Type of drop zone in the overlay
+ */
+export type DropZoneType = CreatePanePosition;
+
+/**
  * Context value for the pane-tabs-layout
  */
 export interface LayoutContextValue {
@@ -79,6 +99,8 @@ export interface LayoutContextValue {
   tabs: Map<Id, TabData>;
   /** Map of all panes by ID */
   panes: Map<Id, PaneConfig>;
+  /** Ordered list of pane IDs for rendering order */
+  paneOrder: Id[];
   /** Move a tab from one pane to another */
   moveTab: (tabId: Id, fromPaneId: Id, toPaneId: Id, targetIndex?: number) => void;
   /** Activate a tab in a pane */
@@ -89,6 +111,8 @@ export interface LayoutContextValue {
   addTab: (paneId: Id, tab: TabData, activate?: boolean) => void;
   /** Remove a pane */
   removePane: (paneId: Id) => void;
+  /** Create a new pane by splitting (drag tab to edge/intersection) */
+  createPane: (tabId: Id, sourcePaneId: Id, position: CreatePanePosition) => void;
   /** Current drag data */
   dragData: DragData | null;
   /** Set drag data */

@@ -67,6 +67,7 @@ html, body, #root {
 .content-panel {
   padding: 20px;
   height: 100%;
+  min-height: 0; /* allow flex child to shrink for scrolling */
   overflow: auto;
 }
 
@@ -158,3 +159,57 @@ html, body, #root {
 .test-case strong {
   color: #9cdcfe;
 }
+
+/* Panel Header (used in nested content) */
+.panel-header {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #3c3c3c;
+  color: #4ec9b0;
+}
+
+/* YAML Panel */
+.yaml-panel pre {
+  background-color: #1e1e1e;
+  border-left: 3px solid #ce9178;
+  font-size: 12px;
+}
+
+/* Markdown Panel */
+.markdown-panel blockquote {
+  border-left: 4px solid #007acc;
+  padding-left: 12px;
+  margin: 16px 0;
+  color: #969696;
+  font-style: italic;
+}
+
+/* Terminal Panel */
+.terminal-panel {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  background-color: #0c0c0c;
+  height: 100%;
+}
+
+.terminal-panel .console-line {
+  font-size: 12px;
+  color: #cccccc;
+}
+
+.terminal-panel .console-line.muted {
+  color: #6a9955;
+  font-style: italic;
+}
+
+.terminal-panel .cursor {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* (no nested layout needed - each row pane contains its own tabs directly) */
