@@ -65,6 +65,8 @@ export const PaneTabsLayout: React.FC<PaneTabsLayoutProps> = ({
   initialTabs,
   onLayoutChange,
   onTabsChange,
+  onOpenLink,
+  linkInterception,
   className = '',
   style,
 }) => {
@@ -74,6 +76,8 @@ export const PaneTabsLayout: React.FC<PaneTabsLayoutProps> = ({
       initialTabs={initialTabs}
       onLayoutChange={onLayoutChange}
       onTabsChange={onTabsChange}
+      onOpenLink={onOpenLink}
+      linkInterception={linkInterception}
     >
       <LayoutContent
         className={className}

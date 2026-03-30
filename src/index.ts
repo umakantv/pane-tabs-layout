@@ -4,6 +4,7 @@ export { PaneTabsLayout } from './PaneTabsLayout';
 // Sub-components
 export { Pane } from './Pane';
 export { Tab } from './Tab';
+export { PaneLink } from './PaneLink';
 
 // Context and hooks
 export { LayoutProvider, useLayout } from './LayoutContext';
@@ -21,9 +22,11 @@ export type {
   DragData,
   DropZoneInfo,
   LayoutContextValue,
+  LinkInterceptionMode,
   PaneTabsLayoutProps,
   TabProps,
   PaneProps,
+  PaneLinkProps,
 } from './types';
 
 // Styles

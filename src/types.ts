@@ -127,6 +127,14 @@ export interface DropZoneInfo {
 }
 
 /**
+ * Link interception mode for the layout
+ * - 'auto': Automatically intercept <a> clicks inside pane content and resolve via onOpenLink
+ * - 'manual': Only intercept links via the <PaneLink> component; no automatic delegation
+ * - 'none': No link interception at all
+ */
+export type LinkInterceptionMode = 'auto' | 'manual' | 'none';
+
+/**
  * Context value for the pane-tabs-layout
  */
 export interface LayoutContextValue {
@@ -148,6 +156,14 @@ export interface LayoutContextValue {
   addTab: (paneId: Id, tab: TabData, activate?: boolean) => void;
   /** Remove a pane (merges with sibling if possible) */
   removePane: (paneId: Id) => void;
+  /**
+   * Open a link as a tab. Calls the user-provided onOpenLink resolver.
+   * If the resolver returns a TabData, the tab is added (or activated if it already exists).
+   * Returns the resolved TabData, or null if the link was not handled.
+   */
+  openLink: (url: string, paneId?: Id) => TabData | null;
+  /** Link interception mode */
+  linkInterception: LinkInterceptionMode;
   /** Current drag data */
   dragData: DragData | null;
   /** Set drag data */
@@ -170,6 +186,37 @@ export interface PaneTabsLayoutProps {
   onLayoutChange?: (layout: LayoutConfig) => void;
   /** Callback when tabs change */
   onTabsChange?: (tabs: TabData[]) => void;
+  /**
+   * Link resolver callback. Called when a link is clicked inside pane content
+   * (in 'auto' mode) or when openLink() is called programmatically.
+   *
+   * Return a TabData to open/activate a tab for the URL, or null to let
+   * the default browser behavior proceed.
+   *
+   * @example
+   * ```tsx
+   * onOpenLink={(url) => {
+   *   const match = url.match(/\/problem\/(\w+)$/);
+   *   if (match) {
+   *     return {
+   *       id: `problem-${match[1]}`,
+   *       title: `Problem ${match[1]}`,
+   *       content: <ProblemView id={match[1]} />,
+   *       data: { problemId: match[1] },
+   *     };
+   *   }
+   *   return null;
+   * }}
+   * ```
+   */
+  onOpenLink?: (url: string) => TabData | null;
+  /**
+   * Controls how links inside pane content are intercepted.
+   * - 'auto' (default): Automatically intercept <a> clicks and resolve via onOpenLink
+   * - 'manual': Only the <PaneLink> component and openLink() calls trigger resolution
+   * - 'none': No link interception at all
+   */
+  linkInterception?: LinkInterceptionMode;
   /** Additional CSS class */
   className?: string;
   /** Inline styles */
@@ -204,4 +251,16 @@ export interface PaneProps {
   paneId: Id;
   /** Additional CSS class */
   className?: string;
+}
+
+/**
+ * Props for the PaneLink component
+ */
+export interface PaneLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+  /** The URL to resolve as a tab */
+  href: string;
+  /** Target pane to open the tab in. If omitted, uses the first available pane. */
+  paneId?: Id;
+  /** Content of the link */
+  children: React.ReactNode;
 }

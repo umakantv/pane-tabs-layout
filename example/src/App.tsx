@@ -1,6 +1,41 @@
-import { PaneTabsLayout, type TabData, type LayoutConfig } from 'pane-tabs-layout';
+import { PaneTabsLayout, PaneLink, type TabData, type LayoutConfig } from 'pane-tabs-layout';
 import { useState, useCallback } from 'react';
 import './App.css';
+
+// ---------- Dynamic content components for link-opened tabs ----------
+
+const DynamicProblemContent = ({ problemId }: { problemId: string }) => (
+  <div className="content-panel">
+    <h2>Problem {problemId}</h2>
+    <p>This tab was dynamically created for problem <strong>{problemId}</strong> via link interception.</p>
+    <p>The content here would normally be fetched from an API using the problem ID.</p>
+    <h3>Related problems:</h3>
+    <ul>
+      <li><a href={`https://example.com/problem/${Number(problemId) + 1}`}>Problem {Number(problemId) + 1}</a> (auto-intercepted link)</li>
+      <li><PaneLink href={`https://example.com/problem/${Number(problemId) + 2}`}>Problem {Number(problemId) + 2}</PaneLink> (PaneLink component)</li>
+      <li><a href="https://google.com" data-ptl-external>Google</a> (external — data-ptl-external, opens normally)</li>
+    </ul>
+  </div>
+);
+
+const DynamicConsoleContent = ({ runId }: { runId: string }) => (
+  <div className="content-panel console-panel">
+    <div className="console-line">
+      <span className="console-prompt">&gt;</span>
+      <span>Run ID: {runId}</span>
+    </div>
+    <div className="console-line">
+      <span className="console-prompt">&gt;</span>
+      <span>This console tab was opened via link interception.</span>
+    </div>
+    <div className="console-line success">
+      <span className="console-prompt">✓</span>
+      <span>Run data would be fetched from API for run {runId}.</span>
+    </div>
+  </div>
+);
+
+// ---------- Static content components ----------
 
 // Sample content components
 const ProblemContent = () => (
@@ -12,6 +47,16 @@ const ProblemContent = () => (
     <pre>{`Input: nums = [2,7,11,15], target = 9
 Output: [0,1]
 Explanation: Because nums[0] + nums[1] == 9, we return [0, 1].`}</pre>
+    <h3>🔗 Link Interception Demo:</h3>
+    <p>Click these links — they open as new tabs instead of navigating away:</p>
+    <ul>
+      <li><a href="https://example.com/problem/42">Problem 42</a> — auto-intercepted regular {'<a>'} tag</li>
+      <li><a href="https://example.com/problem/99">Problem 99</a> — another auto-intercepted link</li>
+      <li><a href="https://example.com/console/run-789">Console run-789</a> — opens a console tab</li>
+      <li><PaneLink href="https://example.com/problem/7">Problem 7 (PaneLink)</PaneLink> — explicit PaneLink component</li>
+      <li><a href="https://google.com" data-ptl-external>Google (external)</a> — has data-ptl-external, opens normally</li>
+      <li><a href="https://unmatched.example.com/unknown">Unknown link</a> — no match, opens normally</li>
+    </ul>
   </div>
 );
 
@@ -230,11 +275,46 @@ function App() {
     setLayout(newLayout);
   }, []);
 
+  /**
+   * Link resolver: the user has full control over URL matching and tab creation.
+   * Return a TabData to open it as a tab, or null to let the browser handle it.
+   */
+  const handleOpenLink = useCallback((url: string): TabData | null => {
+    // Handle /problem/{id} links
+    const problemMatch = url.match(/\/problem\/(\w+)$/);
+    if (problemMatch) {
+      const problemId = problemMatch[1];
+      return {
+        id: `problem-${problemId}`,
+        title: `Problem ${problemId}`,
+        content: <DynamicProblemContent problemId={problemId} />,
+        closable: true,
+        data: { problemId },
+      };
+    }
+
+    // Handle /console/{runId} links
+    const consoleMatch = url.match(/\/console\/([\w-]+)$/);
+    if (consoleMatch) {
+      const runId = consoleMatch[1];
+      return {
+        id: `console-${runId}`,
+        title: `Console ${runId}`,
+        content: <DynamicConsoleContent runId={runId} />,
+        closable: true,
+        data: { runId },
+      };
+    }
+
+    // Not a handled URL — return null to let default browser behavior happen
+    return null;
+  }, []);
+
   return (
     <div className="app-container">
       <header className="app-header">
         <h1>🚀 Pane Tabs Layout Demo</h1>
-        <p>Drag tabs to split panes! Try dragging to the edges of a pane.</p>
+        <p>Drag tabs to split panes! Try dragging to the edges of a pane. Click links inside tabs to open new tabs!</p>
       </header>
       
       <main className="app-main">
@@ -242,6 +322,7 @@ function App() {
           initialLayout={layout}
           initialTabs={initialTabs}
           onLayoutChange={handleLayoutChange}
+          onOpenLink={handleOpenLink}
           className="demo-layout"
         />
       </main>
@@ -249,7 +330,7 @@ function App() {
       <footer className="app-footer">
         <p>
           <strong>Try it:</strong> Drag tabs between panes, or drag to the <strong>edges</strong> of a pane to create new splits!
-          You can create complex layouts with multiple panes. Close tabs with the × button.
+          Click links in the Problem tab to open new tabs dynamically. Close tabs with the × button.
         </p>
       </footer>
     </div>

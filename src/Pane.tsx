@@ -8,7 +8,7 @@ import type { PaneProps, Id, SplitDirection } from './types';
 const EDGE_THRESHOLD = 0.25;
 
 export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
-  const { panes, tabs, moveTab, splitPane, activateTab, closeTab, setDragData, dragData, setDropZone } = useLayout();
+  const { panes, tabs, moveTab, splitPane, activateTab, closeTab, setDragData, dragData, setDropZone, openLink, linkInterception } = useLayout();
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [activeDropZone, setActiveDropZone] = useState<SplitDirection | 'center' | null>(null);
@@ -168,6 +168,43 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
   }, [setDragData, setDropZone]);
 
   /**
+   * Handle clicks on links inside pane content (event delegation).
+   * In 'auto' mode, walks up from the click target to find the nearest <a>,
+   * reads its href, and calls openLink(). If openLink() handles it (returns
+   * a TabData), we preventDefault. Otherwise the click proceeds normally.
+   * Links with the data-ptl-external attribute are always skipped.
+   */
+  const handleContentClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (linkInterception !== 'auto') return;
+
+      // If a PaneLink (or other handler) already called preventDefault, skip
+      if (e.defaultPrevented) return;
+
+      // Walk up from the click target to find the nearest <a> element
+      let target = e.target as HTMLElement;
+      while (target && target !== e.currentTarget) {
+        if (target.tagName === 'A') {
+          // Skip links explicitly marked as external
+          if (target.hasAttribute('data-ptl-external')) return;
+
+          const href = (target as HTMLAnchorElement).href;
+          if (!href) return;
+
+          const resolved = openLink(href, paneId);
+          if (resolved) {
+            e.preventDefault();
+          }
+          // Whether resolved or not, stop walking — we found an <a>
+          return;
+        }
+        target = target.parentElement!;
+      }
+    },
+    [linkInterception, openLink, paneId]
+  );
+
+  /**
    * Get drop zone overlay styles based on active drop zone
    */
   const getDropZoneOverlay = () => {
@@ -248,7 +285,7 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                 <div className="ptl-drop-indicator" />
               )}
             </div>
-            <div className="ptl-pane-content">
+            <div className="ptl-pane-content" onClick={handleContentClick}>
               {activeTabData ? (
                 activeTabData.content
               ) : (

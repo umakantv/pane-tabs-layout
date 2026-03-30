@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PaneTabsLayout } from './PaneTabsLayout';
+import { PaneLink } from './PaneLink';
 import { LayoutProvider, useLayout } from './LayoutContext';
-import type { TabData, LayoutConfig, LayoutNode } from './types';
+import type { TabData, LayoutConfig } from './types';
 
 const mockTabs: TabData[] = [
   {
@@ -793,8 +794,8 @@ describe('PaneTabsLayout', () => {
   });
 
   it('removePane via context removes pane and collapses tree', async () => {
-    let removePaneFn: ((paneId: string) => void) | null = null;
-    let onLayoutChangeMock = vi.fn();
+    let removePaneFn: (paneId: string) => void = () => {};
+    const onLayoutChangeMock = vi.fn();
     
     const TestComponent = () => {
       const { removePane } = useLayout();
@@ -824,9 +825,7 @@ describe('PaneTabsLayout', () => {
     });
     
     // Remove one pane
-    if (removePaneFn) {
-      removePaneFn('pane-remove');
-    }
+    removePaneFn('pane-remove');
     
     // onLayoutChange should fire
     await waitFor(() => {
@@ -835,8 +834,8 @@ describe('PaneTabsLayout', () => {
   });
 
   it('splitPane via context creates a new split', async () => {
-    let splitPaneFn: ((tabId: string, sourcePane: string, targetPane: string, direction: any) => void) | null = null;
-    let onLayoutChangeMock = vi.fn();
+    let splitPaneFn: (tabId: string, sourcePane: string, targetPane: string, direction: any) => void = () => {};
+    const onLayoutChangeMock = vi.fn();
     
     const TestComponent = () => {
       const { splitPane } = useLayout();
@@ -865,9 +864,7 @@ describe('PaneTabsLayout', () => {
     });
     
     // Split by moving tab2 to right of pane-single
-    if (splitPaneFn) {
-      splitPaneFn('tab2', 'pane-single', 'pane-single', 'right');
-    }
+    splitPaneFn('tab2', 'pane-single', 'pane-single', 'right');
     
     // onLayoutChange should fire
     await waitFor(() => {
@@ -1171,5 +1168,701 @@ describe('PaneTabsLayout', () => {
     
     // Tab 1 should still exist
     expect(screen.getByText('Tab 1')).toBeInTheDocument();
+  });
+
+  // ============================================
+  // Link Interception
+  // ============================================
+
+  it('intercepts <a> clicks and opens a tab when onOpenLink returns TabData', async () => {
+    const onOpenLink = vi.fn((url: string): TabData | null => {
+      const match = url.match(/\/problem\/(\w+)/);
+      if (match) {
+        return {
+          id: `problem-${match[1]}`,
+          title: `Problem ${match[1]}`,
+          content: <div data-testid={`problem-${match[1]}-content`}>Problem {match[1]}</div>,
+        };
+      }
+      return null;
+    });
+
+    const tabsWithLink: TabData[] = [
+      {
+        id: 'tab-links',
+        title: 'Links Tab',
+        content: (
+          <div>
+            <a href="https://example.com/problem/42">Open Problem 42</a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-link', tabs: ['tab-links'], activeTab: 'tab-links' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsWithLink}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    // Click the link
+    fireEvent.click(screen.getByText('Open Problem 42'));
+
+    // onOpenLink should have been called with the href
+    expect(onOpenLink).toHaveBeenCalledWith('https://example.com/problem/42');
+
+    // The new tab should appear (tab title + content both contain "Problem 42")
+    await waitFor(() => {
+      expect(screen.getAllByText('Problem 42')).toHaveLength(2); // tab title + content
+      expect(screen.getByTestId('problem-42-content')).toBeInTheDocument();
+    });
+  });
+
+  it('does not intercept links when onOpenLink returns null', () => {
+    const onOpenLink = vi.fn(() => null);
+
+    const tabsWithExtLink: TabData[] = [
+      {
+        id: 'tab-ext',
+        title: 'External',
+        content: (
+          <div>
+            <a href="https://google.com">Google</a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-ext', tabs: ['tab-ext'], activeTab: 'tab-ext' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsWithExtLink}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Google'));
+
+    expect(onOpenLink).toHaveBeenCalledWith('https://google.com/');
+    // No new tab should be created
+    expect(screen.queryByText('Google Tab')).not.toBeInTheDocument();
+  });
+
+  it('skips links with data-ptl-external attribute', () => {
+    const onOpenLink = vi.fn(() => ({
+      id: 'should-not-open',
+      title: 'Should Not Open',
+      content: <div>Should not appear</div>,
+    }));
+
+    const tabsWithExternal: TabData[] = [
+      {
+        id: 'tab-skip',
+        title: 'Skip',
+        content: (
+          <div>
+            <a href="https://example.com/problem/1" data-ptl-external>External Link</a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-skip', tabs: ['tab-skip'], activeTab: 'tab-skip' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsWithExternal}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    fireEvent.click(screen.getByText('External Link'));
+
+    // onOpenLink should NOT have been called
+    expect(onOpenLink).not.toHaveBeenCalled();
+  });
+
+  it('does not intercept links when linkInterception is "none"', () => {
+    const onOpenLink = vi.fn(() => ({
+      id: 'should-not-open',
+      title: 'No',
+      content: <div>No</div>,
+    }));
+
+    const tabsNone: TabData[] = [
+      {
+        id: 'tab-none',
+        title: 'None Mode',
+        content: (
+          <div>
+            <a href="https://example.com/problem/5">Problem 5</a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-none', tabs: ['tab-none'], activeTab: 'tab-none' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsNone}
+        onOpenLink={onOpenLink}
+        linkInterception="none"
+      />
+    );
+
+    fireEvent.click(screen.getByText('Problem 5'));
+
+    expect(onOpenLink).not.toHaveBeenCalled();
+  });
+
+  it('activates existing tab instead of creating duplicate when same ID returned', async () => {
+    const onOpenLink = vi.fn((): TabData | null => ({
+      id: 'tab1',
+      title: 'Tab 1',
+      content: <div data-testid="tab1-content">Tab 1 Content</div>,
+    }));
+
+    const tabsWithLink: TabData[] = [
+      ...mockTabs,
+      {
+        id: 'tab-with-link',
+        title: 'Linker',
+        content: (
+          <div>
+            <a href="https://example.com/reopen-tab1">Reopen Tab 1</a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'pane-a', tabs: ['tab1', 'tab-with-link'], activeTab: 'tab-with-link' },
+        { id: 'pane-b', tabs: ['tab2'], activeTab: 'tab2' },
+      ],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsWithLink}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    // Tab 1 exists but is not active (tab-with-link is active in pane-a)
+    // Click the link that resolves to tab1's ID
+    fireEvent.click(screen.getByText('Reopen Tab 1'));
+
+    expect(onOpenLink).toHaveBeenCalled();
+
+    // Tab 1 should now be the active content (activated, not duplicated)
+    await waitFor(() => {
+      expect(screen.getByTestId('tab1-content')).toBeInTheDocument();
+    });
+  });
+
+  it('openLink from useLayout works programmatically', async () => {
+    const TestComponent = () => {
+      const { openLink } = useLayout();
+      return <button data-testid="open-btn" onClick={() => openLink('https://example.com/problem/99', 'pane-prog')}>Open</button>;
+    };
+
+    const onOpenLink = vi.fn((url: string): TabData | null => {
+      const match = url.match(/\/problem\/(\w+)/);
+      if (match) {
+        return {
+          id: `problem-${match[1]}`,
+          title: `Problem ${match[1]}`,
+          content: <div data-testid={`problem-${match[1]}-content`}>Problem {match[1]}</div>,
+        };
+      }
+      return null;
+    });
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-prog', tabs: ['tab1'], activeTab: 'tab1' }],
+    };
+
+    render(
+      <LayoutProvider
+        initialLayout={layout}
+        initialTabs={mockTabs}
+        onOpenLink={onOpenLink}
+      >
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    // Use the programmatic openLink
+    fireEvent.click(screen.getByTestId('open-btn'));
+
+    await waitFor(() => {
+      expect(onOpenLink).toHaveBeenCalledWith('https://example.com/problem/99');
+    });
+  });
+
+  it('re-opens a tab after it was closed (no stale tabsMap entry)', async () => {
+    const onOpenLink = vi.fn((url: string): TabData | null => {
+      const match = url.match(/\/problem\/(\w+)/);
+      if (match) {
+        return {
+          id: `problem-${match[1]}`,
+          title: `Problem ${match[1]}`,
+          content: <div data-testid={`problem-${match[1]}-content`}>Problem {match[1]}</div>,
+          closable: true,
+        };
+      }
+      return null;
+    });
+
+    const tabsWithLink: TabData[] = [
+      {
+        id: 'tab-links',
+        title: 'Links Tab',
+        closable: false,
+        content: (
+          <div>
+            <a href="https://example.com/problem/50">Open Problem 50</a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-reopen', tabs: ['tab-links'], activeTab: 'tab-links' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsWithLink}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    // 1. Click the link to open the tab
+    fireEvent.click(screen.getByText('Open Problem 50'));
+    await waitFor(() => {
+      expect(screen.getByTestId('problem-50-content')).toBeInTheDocument();
+    });
+
+    // 2. Close the newly opened tab
+    const closeBtn = screen.getByRole('button', { name: /Close Problem 50/i });
+    fireEvent.click(closeBtn);
+    await waitFor(() => {
+      expect(screen.queryByTestId('problem-50-content')).not.toBeInTheDocument();
+    });
+
+    // 3. Click the link again - tab should re-open
+    fireEvent.click(screen.getByText('Open Problem 50'));
+    await waitFor(() => {
+      expect(screen.getByTestId('problem-50-content')).toBeInTheDocument();
+    });
+  });
+
+  it('delegation handler skips when PaneLink already handled the click', async () => {
+    let openLinkCallCount = 0;
+
+    const onOpenLink = vi.fn((url: string): TabData | null => {
+      openLinkCallCount++;
+      const match = url.match(/\/problem\/(\w+)/);
+      if (match) {
+        return {
+          id: `problem-${match[1]}`,
+          title: `Problem ${match[1]}`,
+          content: <div data-testid={`problem-${match[1]}-content`}>Problem {match[1]}</div>,
+        };
+      }
+      return null;
+    });
+
+    // PaneLink is inside tab content — it renders an <a> which the delegation
+    // handler would also catch. But since PaneLink calls preventDefault first,
+    // the delegation handler should skip it.
+    const PaneLinkContent = () => {
+      // Import PaneLink dynamically to use it inside content
+      const { openLink: ctxOpenLink } = useLayout();
+      return (
+        <div>
+          <a
+            href="https://example.com/problem/77"
+            onClick={(e) => {
+              const resolved = ctxOpenLink('https://example.com/problem/77', 'pane-plink');
+              if (resolved) e.preventDefault();
+            }}
+          >
+            PaneLink Problem 77
+          </a>
+        </div>
+      );
+    };
+
+    const tabsWithPaneLink: TabData[] = [
+      {
+        id: 'tab-plink',
+        title: 'PaneLink Tab',
+        content: <PaneLinkContent />,
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-plink', tabs: ['tab-plink'], activeTab: 'tab-plink' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsWithPaneLink}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    fireEvent.click(screen.getByText('PaneLink Problem 77'));
+
+    // onOpenLink should have been called exactly once (by the PaneLink handler),
+    // NOT twice (delegation handler should have skipped)
+    expect(onOpenLink).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('problem-77-content')).toBeInTheDocument();
+    });
+  });
+
+  // ============================================
+  // Link Interception: openLink fallback paths
+  // ============================================
+
+  it('openLink falls back to first pane when no paneId is provided', async () => {
+    const TestComponent = () => {
+      const { openLink } = useLayout();
+      // Call openLink WITHOUT a paneId — should use findFirstPane fallback
+      return <button data-testid="open-no-pane" onClick={() => openLink('https://example.com/problem/55')}>Open</button>;
+    };
+
+    const onOpenLink = vi.fn((url: string): TabData | null => {
+      const match = url.match(/\/problem\/(\w+)/);
+      if (match) {
+        return {
+          id: `problem-${match[1]}`,
+          title: `Problem ${match[1]}`,
+          content: <div data-testid={`problem-${match[1]}-content`}>Problem {match[1]}</div>,
+        };
+      }
+      return null;
+    });
+
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'first-pane', tabs: ['tab1'], activeTab: 'tab1' },
+        { id: 'second-pane', tabs: ['tab2'], activeTab: 'tab2' },
+      ],
+    };
+
+    render(
+      <LayoutProvider initialLayout={layout} initialTabs={mockTabs} onOpenLink={onOpenLink}>
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('open-no-pane'));
+
+    await waitFor(() => {
+      expect(onOpenLink).toHaveBeenCalledWith('https://example.com/problem/55');
+    });
+  });
+
+  it('openLink returns null when no onOpenLink callback is provided', () => {
+    let result: TabData | null = null;
+
+    const TestComponent = () => {
+      const { openLink } = useLayout();
+      return (
+        <button data-testid="open-no-handler" onClick={() => { result = openLink('https://example.com/problem/1'); }}>
+          Open
+        </button>
+      );
+    };
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-x', tabs: ['tab1'], activeTab: 'tab1' }],
+    };
+
+    // NO onOpenLink prop
+    render(
+      <LayoutProvider initialLayout={layout} initialTabs={mockTabs}>
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('open-no-handler'));
+    expect(result).toBeNull();
+  });
+
+  // ============================================
+  // Link Interception: Pane delegation edge cases
+  // ============================================
+
+  it('delegation walks up from nested element inside <a> to find the link', async () => {
+    const onOpenLink = vi.fn((url: string): TabData | null => {
+      const match = url.match(/\/problem\/(\w+)/);
+      if (match) {
+        return {
+          id: `problem-${match[1]}`,
+          title: `Problem ${match[1]}`,
+          content: <div data-testid={`problem-${match[1]}-content`}>Content</div>,
+        };
+      }
+      return null;
+    });
+
+    const tabsNested: TabData[] = [
+      {
+        id: 'tab-nested',
+        title: 'Nested',
+        content: (
+          <div>
+            <a href="https://example.com/problem/88">
+              <span><strong data-testid="nested-click-target">Click me</strong></span>
+            </a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-nested', tabs: ['tab-nested'], activeTab: 'tab-nested' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsNested}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    // Click the deeply nested <strong>, delegation should walk up to <a>
+    fireEvent.click(screen.getByTestId('nested-click-target'));
+
+    expect(onOpenLink).toHaveBeenCalledWith('https://example.com/problem/88');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('problem-88-content')).toBeInTheDocument();
+    });
+  });
+
+  it('delegation ignores <a> elements without an href attribute', () => {
+    const onOpenLink = vi.fn(() => ({
+      id: 'should-not-open',
+      title: 'Nope',
+      content: <div>Nope</div>,
+    }));
+
+    const tabsNoHref: TabData[] = [
+      {
+        id: 'tab-nohref',
+        title: 'No Href',
+        content: (
+          <div>
+            <a data-testid="anchor-no-href">Anchor without href</a>
+          </div>
+        ),
+      },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-nohref', tabs: ['tab-nohref'], activeTab: 'tab-nohref' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsNoHref}
+        onOpenLink={onOpenLink}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('anchor-no-href'));
+
+    // openLink should not be called for an <a> without href
+    expect(onOpenLink).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================
+// PaneLink Component Tests
+// ============================================
+
+describe('PaneLink', () => {
+  const problemResolver = (url: string): TabData | null => {
+    const match = url.match(/\/problem\/(\w+)/);
+    if (match) {
+      return {
+        id: `problem-${match[1]}`,
+        title: `Problem ${match[1]}`,
+        content: <div data-testid={`problem-${match[1]}-content`}>Problem {match[1]}</div>,
+      };
+    }
+    return null;
+  };
+
+  const renderWithProvider = (
+    ui: React.ReactNode,
+    onOpenLink?: (url: string) => TabData | null,
+  ) => {
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-main', tabs: ['tab1'], activeTab: 'tab1' }],
+    };
+    const tabs: TabData[] = [
+      { id: 'tab1', title: 'Tab 1', content: <div>Tab 1</div> },
+    ];
+    return render(
+      <LayoutProvider initialLayout={layout} initialTabs={tabs} onOpenLink={onOpenLink}>
+        {ui}
+      </LayoutProvider>
+    );
+  };
+
+  it('renders as an <a> with the correct href and children', () => {
+    renderWithProvider(
+      <PaneLink href="https://example.com/problem/10">Link Text</PaneLink>,
+      problemResolver,
+    );
+
+    const link = screen.getByText('Link Text');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', 'https://example.com/problem/10');
+  });
+
+  it('passes extra HTML attributes through to the <a> element', () => {
+    renderWithProvider(
+      <PaneLink href="/foo" className="custom-class" data-testid="custom-link">Styled</PaneLink>,
+      problemResolver,
+    );
+
+    const link = screen.getByTestId('custom-link');
+    expect(link).toHaveClass('custom-class');
+    expect(link).toHaveAttribute('href', '/foo');
+  });
+
+  it('calls onOpenLink and prevents default when resolver returns TabData', () => {
+    const onOpenLink = vi.fn(problemResolver);
+
+    renderWithProvider(
+      <PaneLink href="https://example.com/problem/33">Problem 33</PaneLink>,
+      onOpenLink,
+    );
+
+    const link = screen.getByText('Problem 33');
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    const preventDefaultSpy = vi.spyOn(clickEvent, 'preventDefault');
+
+    link.dispatchEvent(clickEvent);
+
+    expect(onOpenLink).toHaveBeenCalledWith('https://example.com/problem/33');
+    expect(preventDefaultSpy).toHaveBeenCalled();
+  });
+
+  it('does NOT preventDefault when resolver returns null (unhandled link)', () => {
+    const onOpenLink = vi.fn(() => null);
+
+    renderWithProvider(
+      <PaneLink href="https://unknown.com/page">Unknown</PaneLink>,
+      onOpenLink,
+    );
+
+    const link = screen.getByText('Unknown');
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    const preventDefaultSpy = vi.spyOn(clickEvent, 'preventDefault');
+
+    link.dispatchEvent(clickEvent);
+
+    expect(onOpenLink).toHaveBeenCalledWith('https://unknown.com/page');
+    expect(preventDefaultSpy).not.toHaveBeenCalled();
+  });
+
+  it('forwards custom onClick prop and runs it before openLink', () => {
+    const customOnClick = vi.fn();
+    const onOpenLink = vi.fn(problemResolver);
+
+    renderWithProvider(
+      <PaneLink href="https://example.com/problem/5" onClick={customOnClick}>
+        Click Me
+      </PaneLink>,
+      onOpenLink,
+    );
+
+    fireEvent.click(screen.getByText('Click Me'));
+
+    // Both should be called: custom onClick first, then onOpenLink
+    expect(customOnClick).toHaveBeenCalled();
+    expect(onOpenLink).toHaveBeenCalled();
+  });
+
+  it('skips openLink when custom onClick calls preventDefault', () => {
+    const customOnClick = vi.fn((e: React.MouseEvent) => {
+      e.preventDefault();
+    });
+    const onOpenLink = vi.fn(problemResolver);
+
+    renderWithProvider(
+      <PaneLink href="https://example.com/problem/5" onClick={customOnClick}>
+        Prevented
+      </PaneLink>,
+      onOpenLink,
+    );
+
+    fireEvent.click(screen.getByText('Prevented'));
+
+    expect(customOnClick).toHaveBeenCalled();
+    // onOpenLink should NOT be called because custom onClick prevented default
+    expect(onOpenLink).not.toHaveBeenCalled();
+  });
+
+  it('targets a specific pane when paneId prop is provided', () => {
+    const onOpenLink = vi.fn(problemResolver);
+
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'left-pane', tabs: ['tab1'], activeTab: 'tab1' },
+        { id: 'right-pane', tabs: ['tab2'], activeTab: 'tab2' },
+      ],
+    };
+    const tabs: TabData[] = [
+      { id: 'tab1', title: 'Tab 1', content: <div>Tab 1</div> },
+      { id: 'tab2', title: 'Tab 2', content: <div>Tab 2</div> },
+    ];
+
+    render(
+      <LayoutProvider initialLayout={layout} initialTabs={tabs} onOpenLink={onOpenLink}>
+        <PaneLink href="https://example.com/problem/20" paneId="right-pane">
+          Open in Right
+        </PaneLink>
+      </LayoutProvider>
+    );
+
+    fireEvent.click(screen.getByText('Open in Right'));
+
+    expect(onOpenLink).toHaveBeenCalledWith('https://example.com/problem/20');
+  });
+
+  it('works without onOpenLink (openLink returns null, no crash)', () => {
+    // No onOpenLink provided
+    renderWithProvider(
+      <PaneLink href="https://example.com/problem/1">Safe Link</PaneLink>,
+    );
+
+    // Should not throw
+    fireEvent.click(screen.getByText('Safe Link'));
+    expect(screen.getByText('Safe Link')).toBeInTheDocument();
   });
 });
