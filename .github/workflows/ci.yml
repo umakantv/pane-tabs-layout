@@ -21,10 +21,11 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build --if-present
-      - run: npm run test -- --coverage --reporter=lcov
-      - name: Coverage comment
-        uses: thollander/actions-coverage-comment@v0
+      - run: npm run test -- --coverage --reporter=cobertura
+      - name: Cobertura coverage reporting
+        uses: 5monkeys/cobertura-action@v1
         if: github.event_name == 'pull_request'
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERSAG_FILE_PATH: ./coverage/lcov.info
+          report_file: ./coverage/cobertura-coverage.xml
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          minimum_coverage: 80
