@@ -4,7 +4,7 @@ A production-ready React component library for creating sophisticated split-pane
 
 ## Preview
 
-![Preview Image](assets/preview-1.png)
+![Preview Image](https://raw.githubusercontent.com/umakantv/pane-tabs-layout/refs/heads/main/assets/preview-1.png)
 
 ## ✨ Features
 
