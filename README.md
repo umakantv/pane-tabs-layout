@@ -16,6 +16,7 @@ A production-ready React component library for creating sophisticated split-pane
 - 💾 **Persistent State** - Serialize and restore complete layout configurations
 - 🎨 **Deeply Customizable** - Extensive CSS variables for complete theming control
 - ♿ **Accessible** - Full ARIA support with keyboard navigation
+- 🔗 **Link Interception** - Automatically open matching links as tabs with custom resolver
 - 📝 **TypeScript First** - 100% TypeScript with comprehensive type definitions
 - 🚀 **Production Ready** - Battle-tested with automated testing and strict type checking
 
@@ -150,6 +151,8 @@ The root component that manages the entire layout system.
 | `initialTabs` | `TabData[]` | ✅ | Array of tab definitions |
 | `onLayoutChange` | `(layout: LayoutConfig) => void` | ❌ | Called when layout structure changes (splits, pane removal, etc.) |
 | `onTabsChange` | `(tabs: TabData[]) => void` | ❌ | Called when tabs are added, removed, or reordered |
+| `onOpenLink` | `(url: string) => TabData \| null` | ❌ | Link resolver — return a `TabData` to open the URL as a tab, or `null` for default browser behavior |
+| `linkInterception` | `'auto' \| 'manual' \| 'none'` | ❌ | Controls how `<a>` clicks inside content are intercepted (default: `'auto'`) |
 | `className` | `string` | ❌ | Additional CSS class for the container |
 | `style` | `React.CSSProperties` | ❌ | Inline styles for the container |
 
@@ -281,6 +284,107 @@ Pane Tabs Layout uses CSS custom properties for complete visual customization:
 }
 ```
 
+## 🔗 Link Handling
+
+Pane Tabs Layout can intercept `<a>` clicks inside tab content and open matching URLs as new tabs — no changes needed to your content components. You provide a resolver function that decides which URLs become tabs.
+
+### Basic Setup
+
+```tsx
+import { PaneTabsLayout, type TabData } from 'pane-tabs-layout';
+
+function App() {
+  // You have full control over matching. Return TabData to open as a tab, null to ignore.
+  const handleOpenLink = useCallback((url: string): TabData | null => {
+    // Handle /problem/{id} links
+    const problemMatch = url.match(/\/problem\/(\w+)$/);
+    if (problemMatch) {
+      const problemId = problemMatch[1];
+      return {
+        id: `problem-${problemId}`,
+        title: `Problem ${problemId}`,
+        content: <ProblemView id={problemId} />,
+        closable: true,
+        data: { problemId },
+      };
+    }
+    // Not handled — browser navigates normally
+    return null;
+  }, []);
+
+  return (
+    <PaneTabsLayout
+      initialLayout={layout}
+      initialTabs={tabs}
+      onOpenLink={handleOpenLink}
+    />
+  );
+}
+```
+
+Now any `<a href="https://example.com/problem/123">` inside your tab content automatically opens a "Problem 123" tab instead of navigating.
+
+### How It Works
+
+1. **Event Delegation** — A single click handler on each pane's content area catches all `<a>` clicks via bubbling.
+2. **Your Resolver Runs** — The clicked link's `href` is passed to your `onOpenLink` callback.
+3. **Tab Created or Activated** — If you return a `TabData`, the library either creates a new tab or activates an existing one with the same `id` (built-in deduplication).
+4. **Or Ignored** — If you return `null`, `preventDefault` is not called and the browser handles the click normally.
+
+### Link Interception Modes
+
+Control the behavior with the `linkInterception` prop:
+
+| Mode | Behavior |
+|------|----------|
+| `'auto'` (default) | All `<a>` clicks inside pane content are intercepted and resolved via `onOpenLink` |
+| `'manual'` | Only the `<PaneLink>` component and programmatic `openLink()` calls trigger resolution |
+| `'none'` | No link interception at all |
+
+### Escape Hatch: `data-ptl-external`
+
+Add `data-ptl-external` to any `<a>` to skip interception, even in `'auto'` mode:
+
+```html
+<a href="https://google.com" data-ptl-external>Opens normally</a>
+```
+
+### PaneLink Component
+
+For explicit, opt-in link handling (useful in `'manual'` mode or when targeting a specific pane):
+
+```tsx
+import { PaneLink } from 'pane-tabs-layout';
+
+const MyContent = () => (
+  <div>
+    {/* Uses onOpenLink resolver, opens tab in the specified pane */}
+    <PaneLink href="/problem/456" paneId="right-pane">Problem 456</PaneLink>
+
+    {/* Works like a normal <a> if onOpenLink returns null */}
+    <PaneLink href="https://external.com">External</PaneLink>
+  </div>
+);
+```
+
+### Programmatic Navigation
+
+Use `openLink()` from the `useLayout` hook to open links from code:
+
+```tsx
+import { useLayout } from 'pane-tabs-layout';
+
+function Toolbar() {
+  const { openLink } = useLayout();
+
+  return (
+    <button onClick={() => openLink('https://example.com/problem/42', 'left-pane')}>
+      Open Problem 42
+    </button>
+  );
+}
+```
+
 ## 🔧 Advanced Usage
 
 ### Hook: useLayout
@@ -301,6 +405,7 @@ function MyComponent() {
     closeTab,       // Close a tab
     addTab,         // Add new tab to pane
     removePane,     // Remove a pane
+    openLink,       // Open a URL as a tab (uses onOpenLink resolver)
   } = useLayout();
   
   // Example: Add a new tab programmatically
@@ -369,9 +474,10 @@ npm run dev
 pane-tabs-layout/
 ├── src/
 │   ├── PaneTabsLayout.tsx    # Main layout component with recursive rendering
-│   ├── Pane.tsx               # Individual pane with drop zone detection
+│   ├── Pane.tsx               # Individual pane with drop zone detection & link interception
 │   ├── Tab.tsx                # Tab component with drag support
-│   ├── LayoutContext.tsx      # React context with tree management
+│   ├── PaneLink.tsx           # Explicit link component for tab-aware navigation
+│   ├── LayoutContext.tsx      # React context with tree management & openLink
 │   ├── types.ts               # Complete TypeScript definitions
 │   ├── styles.css             # Production-ready styles
 │   └── index.ts               # Public API exports

@@ -9,6 +9,7 @@ import type {
   DragData,
   DropZoneInfo,
   LayoutContextValue,
+  LinkInterceptionMode,
 } from './types';
 
 interface LayoutProviderProps {
@@ -17,6 +18,8 @@ interface LayoutProviderProps {
   initialTabs: TabData[];
   onLayoutChange?: (layout: LayoutConfig) => void;
   onTabsChange?: (tabs: TabData[]) => void;
+  onOpenLink?: (url: string) => TabData | null;
+  linkInterception?: LinkInterceptionMode;
 }
 
 const LayoutContext = createContext<LayoutContextValue | null>(null);
@@ -103,12 +106,44 @@ const findParent = (node: LayoutNode, childId: Id): LayoutNode | null => {
 let idCounter = 0;
 const generateId = (prefix: string = 'node'): string => `${prefix}-${Date.now()}-${++idCounter}`;
 
+/**
+ * Find the first pane node in the tree (depth-first)
+ */
+const findFirstPane = (node: LayoutNode): LayoutNode | null => {
+  if (node.type === 'pane') return node;
+  if (node.children) {
+    for (const child of node.children) {
+      const found = findFirstPane(child);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+/**
+ * Find which pane contains a given tab ID
+ */
+const findPaneContainingTab = (node: LayoutNode, tabId: Id): LayoutNode | null => {
+  if (node.type === 'pane' && node.tabs?.includes(tabId)) {
+    return node;
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      const found = findPaneContainingTab(child, tabId);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
 export const LayoutProvider: React.FC<LayoutProviderProps> = ({
   children,
   initialLayout,
   initialTabs,
   onLayoutChange,
   onTabsChange,
+  onOpenLink: onOpenLinkProp,
+  linkInterception: linkInterceptionProp = 'auto',
 }) => {
   // Initialize tabs map
   const [tabsMap, setTabsMap] = useState<Map<Id, TabData>>(() => {
@@ -469,6 +504,43 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
     [notifyChanges, removeNodeFromTree]
   );
 
+  /**
+   * Open a link as a tab. Delegates to the user-provided onOpenLink resolver.
+   * If the resolver returns a TabData, the tab is added to the given pane
+   * (or activated if it already exists). Returns the resolved TabData or null.
+   */
+  const openLink = useCallback(
+    (url: string, paneId?: Id): TabData | null => {
+      if (!onOpenLinkProp) return null;
+
+      const resolved = onOpenLinkProp(url);
+      if (!resolved) return null;
+
+      // Check if a tab with this ID is currently open in the layout tree.
+      // We check the tree (not tabsMap) because closeTab removes the tab
+      // from panes but leaves stale entries in tabsMap.
+      const existingPane = findPaneContainingTab(rootNode, resolved.id);
+      if (existingPane) {
+        activateTab(existingPane.id, resolved.id);
+        return resolved;
+      }
+
+      // Determine the target pane: explicit paneId > first available pane
+      let targetPaneId = paneId;
+      if (!targetPaneId) {
+        const firstPane = findFirstPane(rootNode);
+        targetPaneId = firstPane?.id;
+      }
+      if (!targetPaneId) return null;
+
+      addTab(targetPaneId, resolved, true);
+      return resolved;
+    },
+    [onOpenLinkProp, rootNode, activateTab, addTab]
+  );
+
+  const linkInterception = linkInterceptionProp;
+
   const value = useMemo(
     () => ({
       tabs: tabsMap,
@@ -480,12 +552,14 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       closeTab,
       addTab,
       removePane,
+      openLink,
+      linkInterception,
       dragData,
       setDragData,
       dropZone,
       setDropZone,
     }),
-    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, dragData, dropZone]
+    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone]
   );
 
   return (
