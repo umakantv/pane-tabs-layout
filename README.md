@@ -19,8 +19,7 @@ A production-ready React component library for creating sophisticated split-pane
 - 🔗 **Link Interception** - Automatically open matching links as tabs with custom resolver
 - 📝 **TypeScript First** - 100% TypeScript with comprehensive type definitions
 - 🚀 **Production Ready** - Battle-tested with automated testing and strict type checking
-
-## 📦 Installation
+- 🔲 **Maximize / Restore Panes** - Double-click the empty tab bar area or click the maximize/restore button (top-right of tab bar) to toggle a pane between normal and maximized (full viewport) states.## 📦 Installation
 
 ```sh
 npm install pane-tabs-layout
@@ -405,8 +404,14 @@ function MyComponent() {
     closeTab,       // Close a tab
     addTab,         // Add new tab to pane
     removePane,     // Remove a pane
+    maximizePane,   // Toggle pane maximize/restore
     openLink,       // Open a URL as a tab (uses onOpenLink resolver)
   } = useLayout();
+  
+// Example: Toggle pane maximize
+  const handleMaximize = (paneId: string) => {
+    maximizePane(paneId);
+  };
   
   // Example: Add a new tab programmatically
   const handleAddTab = () => {
