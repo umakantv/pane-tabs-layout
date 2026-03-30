@@ -17,6 +17,7 @@ interface LayoutProviderProps {
   initialTabs: TabData[];
   onLayoutChange?: (layout: LayoutConfig) => void;
   onTabsChange?: (tabs: TabData[]) => void;
+  onOpenLink?: (url: string) => TabData | null | Promise<TabData | null>;
 }
 
 const LayoutContext = createContext<LayoutContextValue | null>(null);
@@ -109,6 +110,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
   initialTabs,
   onLayoutChange,
   onTabsChange,
+  onOpenLink,
 }) => {
   // Initialize tabs map
   const [tabsMap, setTabsMap] = useState<Map<Id, TabData>>(() => {
@@ -413,6 +415,13 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
   const closeTab = useCallback(
     (paneId: Id, tabId: Id) => {
+      // Remove tab from tabsMap
+      setTabsMap((prev) => {
+        const newMap = new Map(prev);
+        newMap.delete(tabId);
+        return newMap;
+      });
+
       setRootNode((prevRoot) => {
         const newRoot = updatePaneInTree(prevRoot, paneId, (pane) => {
           const newTabs = (pane.tabs || []).filter((id) => id !== tabId);
@@ -461,12 +470,28 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
   const removePane = useCallback(
     (paneId: Id) => {
+      // Find tabs in this pane from current panesMap (derived from rootNode)
+      const pane = panesMap.get(paneId);
+      const tabsToRemove = pane?.tabs ?? [];
+
+      // Remove tab data from tabsMap
+      if (tabsToRemove.length > 0) {
+        setTabsMap((prev) => {
+          const newMap = new Map(prev);
+          for (const tabId of tabsToRemove) {
+            newMap.delete(tabId);
+          }
+          return newMap;
+        });
+      }
+
       setRootNode((prevRoot) => {
         return removeNodeFromTree(prevRoot, paneId) || { id: 'root', type: 'pane', tabs: [] };
       });
+
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, removeNodeFromTree]
+    [notifyChanges, removeNodeFromTree, panesMap]
   );
 
   const value = useMemo(
@@ -480,12 +505,13 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       closeTab,
       addTab,
       removePane,
+      onOpenLink,
       dragData,
       setDragData,
       dropZone,
       setDropZone,
     }),
-    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, dragData, dropZone]
+    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, onOpenLink, dragData, dropZone]
   );
 
   return (

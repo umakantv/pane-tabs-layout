@@ -1172,4 +1172,372 @@ describe('PaneTabsLayout', () => {
     // Tab 1 should still exist
     expect(screen.getByText('Tab 1')).toBeInTheDocument();
   });
+
+  // ============================================
+  // onOpenLink feature tests
+  // ============================================
+  describe('onOpenLink', () => {
+    it('calls onOpenLink with the href when an anchor is clicked inside tab content', async () => {
+      const onOpenLink = vi.fn(() => null);
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: <a href="https://example.com/problem/123" data-testid="test-link">Click Me</a>,
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      // Click the link inside the tab content
+      fireEvent.click(screen.getByTestId('test-link'));
+      
+      expect(onOpenLink).toHaveBeenCalledTimes(1);
+      expect(onOpenLink).toHaveBeenCalledWith('https://example.com/problem/123');
+    });
+
+    it('opens a new tab when onOpenLink returns TabData for an unknown tab id', async () => {
+      const onOpenLink = vi.fn(() => ({
+        id: 'new-problem-tab',
+        title: 'Problem 123',
+        content: <div data-testid="new-tab-content">New Tab Content</div>,
+        closable: true,
+      }));
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: <a href="/problem/123" data-testid="problem-link">Open Problem</a>,
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      // Click the link
+      fireEvent.click(screen.getByTestId('problem-link'));
+      
+      // New tab should appear
+      await waitFor(() => {
+        expect(screen.getByTestId('new-tab-content')).toBeInTheDocument();
+      });
+      
+      // The new tab title should be visible
+      expect(screen.getByText('Problem 123')).toBeInTheDocument();
+    });
+
+    it('activates existing tab when onOpenLink returns TabData for an already-open tab', async () => {
+      const onOpenLink = vi.fn(() => ({
+        id: 'shared-tab',
+        title: 'Shared Tab',
+        content: <div data-testid="shared-content">Shared Content</div>,
+        closable: true,
+      }));
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: <a href="/shared" data-testid="shared-link">Open Shared</a>,
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      // First click - creates the tab
+      fireEvent.click(screen.getByTestId('shared-link'));
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('shared-content')).toBeInTheDocument();
+      });
+      
+      // The tab should now be visible in the tab bar
+      expect(screen.getByText('Shared Tab')).toBeInTheDocument();
+      
+      // Switch back to the original tab to click the link again
+      fireEvent.click(screen.getByText('Link Tab'));
+      
+      // Wait for tab switch to complete
+      await waitFor(() => {
+        expect(screen.getByTestId('shared-link')).toBeInTheDocument();
+      });
+      
+      // Now click the link again - should activate existing tab
+      fireEvent.click(screen.getByTestId('shared-link'));
+      
+      // onOpenLink called twice
+      await waitFor(() => {
+        expect(onOpenLink).toHaveBeenCalledTimes(2);
+      });
+      
+      // Content should still be visible (tab was activated, not duplicated)
+      expect(screen.getByTestId('shared-content')).toBeInTheDocument();
+    });
+
+    it('does nothing special when onOpenLink returns null (allows default behavior)', async () => {
+      const onOpenLink = vi.fn(() => null);
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: <a href="/external" data-testid="external-link">External Link</a>,
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      // Click the link
+      fireEvent.click(screen.getByTestId('external-link'));
+      
+      // onOpenLink was called (JSDOM resolves to full URL)
+      expect(onOpenLink).toHaveBeenCalledWith(expect.stringContaining('/external'));
+      
+      // No new tabs should be added (only the original link-tab exists)
+      expect(screen.getByText('Link Tab')).toBeInTheDocument();
+      // The "External Link" text should still be in the document
+      expect(screen.getByTestId('external-link')).toBeInTheDocument();
+    });
+
+    it('does not attach click handler when onOpenLink is not provided', () => {
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: <a href="/test" data-testid="test-link">Test Link</a>,
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+        />
+      );
+      
+      // Click should not cause any special behavior (no onOpenLink)
+      // Just verify it doesn't crash
+      fireEvent.click(screen.getByTestId('test-link'));
+      
+      // The link is still there
+      expect(screen.getByTestId('test-link')).toBeInTheDocument();
+    });
+
+    it('supports async onOpenLink that returns a Promise', async () => {
+      const onOpenLink = vi.fn(async () => {
+        // Simulate async work (e.g., API call)
+        await Promise.resolve();
+        return {
+          id: 'async-tab',
+          title: 'Async Tab',
+          content: <div data-testid="async-content">Async Content</div>,
+          closable: true,
+        };
+      });
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: <a href="/async" data-testid="async-link">Async Link</a>,
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      // Click the link
+      fireEvent.click(screen.getByTestId('async-link'));
+      
+      // Wait for async tab to appear
+      await waitFor(() => {
+        expect(screen.getByTestId('async-content')).toBeInTheDocument();
+      });
+      
+      expect(onOpenLink).toHaveBeenCalledWith(expect.stringContaining('/async'));
+    });
+
+    it('ignores clicks on anchors without href attribute', async () => {
+      const onOpenLink = vi.fn(() => null);
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: (
+            <div>
+              <a data-testid="no-href-link">No Href</a>
+              <a href="/with-href" data-testid="with-href-link">With Href</a>
+            </div>
+          ),
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      // Click the anchor without href
+      fireEvent.click(screen.getByTestId('no-href-link'));
+      
+      // onOpenLink should NOT be called for anchor without href
+      expect(onOpenLink).not.toHaveBeenCalled();
+      
+      // Click the anchor with href
+      fireEvent.click(screen.getByTestId('with-href-link'));
+      
+      // Now it should be called
+      expect(onOpenLink).toHaveBeenCalledWith(expect.stringContaining('/with-href'));
+    });
+
+    it('handles clicking nested elements inside an anchor', async () => {
+      const onOpenLink = vi.fn(() => ({
+        id: 'nested-tab',
+        title: 'Nested',
+        content: <div data-testid="nested-content">Nested</div>,
+      }));
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: (
+            <a href="/nested" data-testid="parent-link">
+              <span data-testid="child-span">Click inside span</span>
+            </a>
+          ),
+        },
+      ];
+      
+      const layoutWithLink: LayoutConfig = {
+        panes: [{ id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' }],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={layoutWithLink}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      // Click the nested span (inside the anchor)
+      fireEvent.click(screen.getByTestId('child-span'));
+      
+      // Should still find the parent anchor and call onOpenLink
+      expect(onOpenLink).toHaveBeenCalledWith(expect.stringContaining('/nested'));
+      
+      // Tab should be opened
+      await waitFor(() => {
+        expect(screen.getByTestId('nested-content')).toBeInTheDocument();
+      });
+    });
+
+    it('opens tab in the first visible pane when multiple panes exist', async () => {
+      const onOpenLink = vi.fn(() => ({
+        id: 'multi-pane-tab',
+        title: 'Multi Pane Tab',
+        content: <div data-testid="multi-pane-content">Multi</div>,
+      }));
+      
+      const tabsWithLink: TabData[] = [
+        {
+          id: 'link-tab',
+          title: 'Link Tab',
+          content: <a href="/multi" data-testid="multi-link">Multi</a>,
+        },
+        {
+          id: 'tab2',
+          title: 'Tab 2',
+          content: <div>Tab 2 Content</div>,
+        },
+      ];
+      
+      const multiPaneLayout: LayoutConfig = {
+        panes: [
+          { id: 'pane1', tabs: ['link-tab'], activeTab: 'link-tab' },
+          { id: 'pane2', tabs: ['tab2'], activeTab: 'tab2' },
+        ],
+      };
+      
+      render(
+        <PaneTabsLayout
+          initialLayout={multiPaneLayout}
+          initialTabs={tabsWithLink}
+          onOpenLink={onOpenLink}
+        />
+      );
+      
+      fireEvent.click(screen.getByTestId('multi-link'));
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('multi-pane-content')).toBeInTheDocument();
+      });
+      
+      // The new tab should be visible
+      expect(screen.getByText('Multi Pane Tab')).toBeInTheDocument();
+    });
+  });
 });

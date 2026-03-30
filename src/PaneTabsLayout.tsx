@@ -47,14 +47,54 @@ const LayoutContent: React.FC<{
   minSize?: number;
   maxSize?: number;
 }> = ({ className, style, minSize, maxSize }) => {
-  const { rootNode } = useLayout();
+  const { rootNode, onOpenLink, tabs, panes, activateTab, addTab } = useLayout();
+
+  const handleClickCapture = React.useCallback(async (e: React.MouseEvent) => {
+    if (!onOpenLink) return;
+
+    const target = e.target as HTMLElement;
+    const anchor = target.closest('a[href]');
+    if (!anchor) return;
+
+    const href = (anchor as HTMLAnchorElement).href;
+    if (!href) return;
+
+    const tabData = await onOpenLink(href);
+    if (!tabData) return; // User returned null — let default happen
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Check if tab exists
+    if (tabs.has(tabData.id)) {
+      // Find pane and activate
+      for (const [paneId, pane] of panes) {
+        if (pane.tabs.includes(tabData.id)) {
+          activateTab(paneId, tabData.id);
+          return;
+        }
+      }
+      return;
+    }
+
+    // New tab — pick a pane
+    const paneList = Array.from(panes.values());
+    const targetPane = paneList.find(p => p.visible !== false) || paneList[0];
+    if (targetPane) {
+      addTab(targetPane.id, tabData);
+    }
+  }, [onOpenLink, tabs, panes, activateTab, addTab]);
 
   if (!rootNode) {
     return <div className={`ptl-layout ${className}`} style={style}>No layout</div>;
   }
 
   return (
-    <div className={`ptl-layout ${className}`} style={style}>
+    <div
+      className={`ptl-layout ${className}`}
+      style={style}
+      onClickCapture={onOpenLink ? handleClickCapture : undefined}
+    >
       <LayoutNodeRenderer node={rootNode} minSize={minSize} maxSize={maxSize} />
     </div>
   );
@@ -65,6 +105,7 @@ export const PaneTabsLayout: React.FC<PaneTabsLayoutProps> = ({
   initialTabs,
   onLayoutChange,
   onTabsChange,
+  onOpenLink,
   className = '',
   style,
 }) => {
@@ -74,6 +115,7 @@ export const PaneTabsLayout: React.FC<PaneTabsLayoutProps> = ({
       initialTabs={initialTabs}
       onLayoutChange={onLayoutChange}
       onTabsChange={onTabsChange}
+      onOpenLink={onOpenLink}
     >
       <LayoutContent
         className={className}

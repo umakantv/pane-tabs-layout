@@ -12,8 +12,42 @@ const ProblemContent = () => (
     <pre>{`Input: nums = [2,7,11,15], target = 9
 Output: [0,1]
 Explanation: Because nums[0] + nums[1] == 9, we return [0, 1].`}</pre>
+    
+    <h3>Related Problems</h3>
+    <ul>
+      <li><a href="/problem/2">Add Two Numbers</a> — Linked lists</li>
+      <li><a href="/problem/15">3Sum</a> — Array, Two Pointers</li>
+      <li><a href="/problem/167">Two Sum II</a> — Sorted array</li>
+    </ul>
+    <p style={{ fontSize: '0.9em', color: '#666' }}>
+      💡 Click the links above to open them as new tabs! This demonstrates the <code>onOpenLink</code> feature.
+    </p>
   </div>
 );
+
+// Dynamic problem content for tabs opened via onOpenLink
+interface DynamicProblemProps {
+  problemId: string;
+}
+const DynamicProblemContent = ({ problemId }: DynamicProblemProps) => {
+  const problemTitles: Record<string, string> = {
+    '2': 'Add Two Numbers',
+    '15': '3Sum',
+    '167': 'Two Sum II',
+  };
+  const title = problemTitles[problemId] || `Problem ${problemId}`;
+  
+  return (
+    <div className="content-panel">
+      <h2>{title}</h2>
+      <p>This tab was dynamically opened via <code>onOpenLink</code> with problemId: <strong>{problemId}</strong>.</p>
+      <p>Tab ID: <code>problem-{problemId}</code></p>
+      <p style={{ fontSize: '0.9em', color: '#666' }}>
+        Try closing this tab and clicking the link again from the Two Sum problem to see it reopen!
+      </p>
+    </div>
+  );
+};
 
 const CodeContent = () => (
   <div className="content-panel code-panel">
@@ -230,6 +264,23 @@ function App() {
     setLayout(newLayout);
   }, []);
 
+  const handleOpenLink = useCallback((url: string): TabData | null => {
+    // Handle /problem/{id} links
+    const problemMatch = url.match(/\/problem\/(\w+)$/);
+    if (problemMatch) {
+      const problemId = problemMatch[1];
+      return {
+        id: `problem-${problemId}`,
+        title: `Problem ${problemId}`,
+        content: <DynamicProblemContent problemId={problemId} />,
+        closable: true,
+        data: { problemId },
+      };
+    }
+    // Not a handled URL — return null to let default browser behavior happen
+    return null;
+  }, []);
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -242,6 +293,7 @@ function App() {
           initialLayout={layout}
           initialTabs={initialTabs}
           onLayoutChange={handleLayoutChange}
+          onOpenLink={handleOpenLink}
           className="demo-layout"
         />
       </main>
@@ -250,6 +302,9 @@ function App() {
         <p>
           <strong>Try it:</strong> Drag tabs between panes, or drag to the <strong>edges</strong> of a pane to create new splits!
           You can create complex layouts with multiple panes. Close tabs with the × button.
+        </p>
+        <p>
+          <strong>✨ New:</strong> Click links in the <strong>Problem</strong> tab (like "Add Two Numbers") to open them as new tabs dynamically via <code>onOpenLink</code>!
         </p>
       </footer>
     </div>

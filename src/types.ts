@@ -148,6 +148,8 @@ export interface LayoutContextValue {
   addTab: (paneId: Id, tab: TabData, activate?: boolean) => void;
   /** Remove a pane (merges with sibling if possible) */
   removePane: (paneId: Id) => void;
+  /** Handler for opening a link - returns TabData to open a tab, or null to allow default behavior */
+  onOpenLink?: (url: string) => TabData | null | Promise<TabData | null>;
   /** Current drag data */
   dragData: DragData | null;
   /** Set drag data */
@@ -170,6 +172,8 @@ export interface PaneTabsLayoutProps {
   onLayoutChange?: (layout: LayoutConfig) => void;
   /** Callback when tabs change */
   onTabsChange?: (tabs: TabData[]) => void;
+  /** Callback when a link is clicked inside the layout. Return TabData to open a tab, or null to allow default behavior. */
+  onOpenLink?: (url: string) => TabData | null | Promise<TabData | null>;
   /** Additional CSS class */
   className?: string;
   /** Inline styles */

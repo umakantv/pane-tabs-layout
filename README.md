@@ -16,6 +16,7 @@ A production-ready React component library for creating sophisticated split-pane
 - 💾 **Persistent State** - Serialize and restore complete layout configurations
 - 🎨 **Deeply Customizable** - Extensive CSS variables for complete theming control
 - ♿ **Accessible** - Full ARIA support with keyboard navigation
+- 🔗 **Link Interception** - Intercept anchor clicks inside tabs to open them as new tabs dynamically
 - 📝 **TypeScript First** - 100% TypeScript with comprehensive type definitions
 - 🚀 **Production Ready** - Battle-tested with automated testing and strict type checking
 
@@ -150,6 +151,7 @@ The root component that manages the entire layout system.
 | `initialTabs` | `TabData[]` | ✅ | Array of tab definitions |
 | `onLayoutChange` | `(layout: LayoutConfig) => void` | ❌ | Called when layout structure changes (splits, pane removal, etc.) |
 | `onTabsChange` | `(tabs: TabData[]) => void` | ❌ | Called when tabs are added, removed, or reordered |
+| `onOpenLink` | `(url: string) => TabData \| null \| Promise<TabData \| null>` | ❌ | Called when an anchor is clicked inside tab content. Return `TabData` to open a new tab, or `null` to allow default navigation |
 | `className` | `string` | ❌ | Additional CSS class for the container |
 | `style` | `React.CSSProperties` | ❌ | Inline styles for the container |
 
@@ -315,6 +317,51 @@ function MyComponent() {
   return <button onClick={handleAddTab}>Add Tab</button>;
 }
 ```
+
+### Intercepting Links Inside Tabs
+
+Open links inside tab content as new tabs dynamically using the `onOpenLink` callback:
+
+```tsx
+function App() {
+  const handleOpenLink = (url: string) => {
+    // Match URLs like /problem/123
+    const match = url.match(/\/problem\/(\w+)$/);
+    if (match) {
+      const problemId = match[1];
+      return {
+        id: `problem-${problemId}`,
+        title: `Problem ${problemId}`,
+        content: <ProblemTab problemId={problemId} />,
+        closable: true,
+        data: { problemId },
+      };
+    }
+    // Return null for unhandled URLs to allow default navigation
+    return null;
+  };
+
+  return (
+    <PaneTabsLayout
+      initialLayout={layout}
+      initialTabs={tabs}
+      onOpenLink={handleOpenLink}
+    />
+  );
+}
+```
+
+**How it works:**
+- Any `<a href="...">` clicked inside tab content triggers `onOpenLink(url)`
+- If you return a `TabData` object, the tab is opened (or activated if already open)
+- If you return `null`, the click is ignored and default browser navigation proceeds
+- Works with nested elements inside anchors (e.g., `<a><span>Click me</span></a>`)
+- Supports async callbacks: `onOpenLink` can return `Promise<TabData | null>`
+
+This is perfect for:
+- "Related items" links in content (problems, issues, documents)
+- Markdown-rendered content with internal links
+- Any app where clicking links should open new tabs instead of navigating
 
 ### Persisting Layout State
 
