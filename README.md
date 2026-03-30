@@ -2,6 +2,10 @@
 
 A production-ready React component library for creating sophisticated split-pane layouts with draggable tabs. Inspired by industry-leading IDEs like VS Code and LeetCode, it provides a powerful, flexible, and accessible workspace management solution. Built on top of the robust [allotment](https://github.com/johnwalley/allotment) library for smooth, performant pane resizing.
 
+## Preview
+
+![Preview Image](assets/preview-1.png)
+
 ## ✨ Features
 
 - 🪟 **Infinite Split Panes** - Create complex nested layouts by dragging tabs to any edge
