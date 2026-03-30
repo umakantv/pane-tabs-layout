@@ -491,6 +491,10 @@ pane-tabs-layout/
 └── package.json
 ```
 
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details on setting up the development environment and how to contribute.
+
 ## 📄 License
 
 ISC © [umakantv](https://github.com/umakantv)
