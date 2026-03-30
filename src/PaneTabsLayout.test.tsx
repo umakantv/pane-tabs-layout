@@ -1696,6 +1696,291 @@ describe('PaneTabsLayout', () => {
     // openLink should not be called for an <a> without href
     expect(onOpenLink).not.toHaveBeenCalled();
   });
+
+  // ============================================
+  // Maximize / Restore
+  // ============================================
+
+  it('renders maximize button in each pane tab bar', () => {
+    render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    const maximizeBtns = screen.getAllByRole('button', { name: /maximize pane/i });
+    // Two panes → two maximize buttons
+    expect(maximizeBtns.length).toBe(2);
+  });
+
+  it('maximizes a pane when the maximize button is clicked', async () => {
+    const { container } = render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    // Both panes visible initially
+    expect(screen.getByText('Tab 1')).toBeInTheDocument();
+    expect(screen.getByText('Tab 3')).toBeInTheDocument();
+
+    // Click the first maximize button (pane 1)
+    const maximizeBtns = screen.getAllByRole('button', { name: /maximize pane/i });
+    fireEvent.click(maximizeBtns[0]);
+
+    // Layout should be in maximized state (data attribute set)
+    await waitFor(() => {
+      const layout = container.querySelector('.ptl-layout');
+      expect(layout).toHaveAttribute('data-maximized-pane');
+    });
+
+    // The maximized pane has the data-maximized attribute
+    const maximizedPane = container.querySelector('.ptl-pane[data-maximized]');
+    expect(maximizedPane).toBeInTheDocument();
+
+    // Sibling content is still in the DOM (CSS-hidden, not unmounted)
+    expect(screen.getByText('Tab 3')).toBeInTheDocument();
+
+    // Button should now show "Restore pane"
+    expect(screen.getByRole('button', { name: /restore pane/i })).toBeInTheDocument();
+  });
+
+  it('restores the layout when the restore button is clicked', async () => {
+    const { container } = render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    // Maximize pane 1
+    const maximizeBtns = screen.getAllByRole('button', { name: /maximize pane/i });
+    fireEvent.click(maximizeBtns[0]);
+
+    await waitFor(() => {
+      expect(container.querySelector('.ptl-layout')).toHaveAttribute('data-maximized-pane');
+    });
+
+    // Click restore
+    const restoreBtn = screen.getByRole('button', { name: /restore pane/i });
+    fireEvent.click(restoreBtn);
+
+    // Maximize state should be cleared
+    await waitFor(() => {
+      expect(container.querySelector('.ptl-layout')).not.toHaveAttribute('data-maximized-pane');
+      expect(container.querySelector('.ptl-pane[data-maximized]')).not.toBeInTheDocument();
+    });
+  });
+
+  it('restores layout via Escape key', async () => {
+    const { container } = render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    // Maximize pane 1
+    const maximizeBtns = screen.getAllByRole('button', { name: /maximize pane/i });
+    fireEvent.click(maximizeBtns[0]);
+
+    await waitFor(() => {
+      expect(container.querySelector('.ptl-layout')).toHaveAttribute('data-maximized-pane');
+    });
+
+    // Press Escape
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // Maximize state should be cleared
+    await waitFor(() => {
+      expect(container.querySelector('.ptl-layout')).not.toHaveAttribute('data-maximized-pane');
+    });
+  });
+
+  it('maximizePane and restorePane are available via useLayout', async () => {
+    let maximizeFn: (id: string) => void = () => {};
+    let restoreFn: () => void = () => {};
+    let maximizedId: string | null = null;
+
+    const TestComponent = () => {
+      const { maximizePane, restorePane, maximizedPaneId } = useLayout();
+      maximizeFn = maximizePane;
+      restoreFn = restorePane;
+      maximizedId = maximizedPaneId;
+      return <span data-testid="hook-ready" />;
+    };
+
+    render(
+      <LayoutProvider
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      >
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('hook-ready')).toBeInTheDocument());
+
+    // Initially no pane is maximized
+    expect(maximizedId).toBeNull();
+
+    // Maximize a pane
+    maximizeFn('pane1');
+
+    await waitFor(() => {
+      expect(maximizedId).toBe('pane1');
+    });
+
+    // Restore
+    restoreFn();
+
+    await waitFor(() => {
+      expect(maximizedId).toBeNull();
+    });
+  });
+
+  it('maximizes a deeply nested pane showing only that branch', async () => {
+    const deepLayout: LayoutConfig = {
+      root: {
+        id: 'root',
+        type: 'split',
+        direction: 'horizontal',
+        children: [
+          { id: 'pane-left', type: 'pane', tabs: ['tab1'], activeTab: 'tab1' },
+          {
+            id: 'split-right',
+            type: 'split',
+            direction: 'vertical',
+            children: [
+              { id: 'pane-top-right', type: 'pane', tabs: ['tab2'], activeTab: 'tab2' },
+              { id: 'pane-bottom-right', type: 'pane', tabs: ['tab3'], activeTab: 'tab3' },
+            ],
+            sizes: [0.5, 0.5],
+          },
+        ],
+        sizes: [0.5, 0.5],
+      },
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={deepLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    // All three tabs visible
+    expect(screen.getByText('Tab 1')).toBeInTheDocument();
+    expect(screen.getByText('Tab 2')).toBeInTheDocument();
+    expect(screen.getByText('Tab 3')).toBeInTheDocument();
+
+    // Maximize the bottom-right pane (Tab 3)
+    const maximizeBtns = screen.getAllByRole('button', { name: /maximize pane/i });
+    // bottom-right is the last pane -> last button
+    fireEvent.click(maximizeBtns[maximizeBtns.length - 1]);
+
+    await waitFor(() => {
+      // The maximized pane has the attribute
+      const maximized = document.querySelector('.ptl-pane[data-maximized]');
+      expect(maximized).toBeInTheDocument();
+      // All three tabs are still in the DOM (CSS-hidden siblings, not unmounted)
+      expect(screen.getByText('Tab 1')).toBeInTheDocument();
+      expect(screen.getByText('Tab 2')).toBeInTheDocument();
+      expect(screen.getByText('Tab 3')).toBeInTheDocument();
+    });
+  });
+
+  it('auto-restores when the maximized pane is removed', async () => {
+    const twoPane: LayoutConfig = {
+      root: {
+        id: 'root',
+        type: 'split',
+        direction: 'horizontal',
+        children: [
+          { id: 'pane-a', type: 'pane', tabs: ['tab1', 'tab2'], activeTab: 'tab1' },
+          { id: 'pane-b', type: 'pane', tabs: ['tab3'], activeTab: 'tab3' },
+        ],
+        sizes: [0.5, 0.5],
+      },
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={twoPane}
+        initialTabs={mockTabs}
+      />
+    );
+
+    // Maximize pane-b (Tab 3 only)
+    const maximizeBtns = screen.getAllByRole('button', { name: /maximize pane/i });
+    fireEvent.click(maximizeBtns[maximizeBtns.length - 1]);
+
+    await waitFor(() => {
+      const layout = document.querySelector('.ptl-layout');
+      expect(layout).toHaveAttribute('data-maximized-pane');
+    });
+
+    // Close Tab 3 (the only tab in pane-b), removing the pane.
+    // Use the specific aria-label since siblings stay mounted.
+    const closeBtn = screen.getByRole('button', { name: /Close Tab 3/i });
+    fireEvent.click(closeBtn);
+
+    // Should auto-restore — maximized state cleared, pane-a still present
+    await waitFor(() => {
+      const layout = document.querySelector('.ptl-layout');
+      expect(layout).not.toHaveAttribute('data-maximized-pane');
+      expect(screen.getByText('Tab 1')).toBeInTheDocument();
+      expect(screen.getByText('Tab 2')).toBeInTheDocument();
+    });
+  });
+
+  it('double-click on tab bar empty area maximizes the pane', async () => {
+    const { container } = render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    // Double-click on the first pane's tab bar
+    const tabBars = document.querySelectorAll('.ptl-tab-bar');
+    expect(tabBars.length).toBeGreaterThanOrEqual(1);
+    fireEvent.doubleClick(tabBars[0]);
+
+    // Layout should be in maximized state
+    await waitFor(() => {
+      expect(container.querySelector('.ptl-layout')).toHaveAttribute('data-maximized-pane');
+      expect(container.querySelector('.ptl-pane[data-maximized]')).toBeInTheDocument();
+    });
+  });
+
+  it('keeps sibling panes mounted during maximize (preserves DOM state)', async () => {
+    const { container } = render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    // Count panes before maximize
+    const panesBefore = container.querySelectorAll('.ptl-pane').length;
+    expect(panesBefore).toBe(2);
+
+    // Maximize first pane
+    const maximizeBtns = screen.getAllByRole('button', { name: /maximize pane/i });
+    fireEvent.click(maximizeBtns[0]);
+
+    await waitFor(() => {
+      expect(container.querySelector('.ptl-layout')).toHaveAttribute('data-maximized-pane');
+    });
+
+    // Same number of panes still in the DOM (nothing unmounted)
+    const panesAfter = container.querySelectorAll('.ptl-pane').length;
+    expect(panesAfter).toBe(panesBefore);
+  });
+
 });
 
 // ============================================

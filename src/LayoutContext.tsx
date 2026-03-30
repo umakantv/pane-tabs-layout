@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import type {
   Id,
   TabData,
@@ -35,20 +35,27 @@ export const useLayout = (): LayoutContextValue => {
 /**
  * Convert legacy flat panes array to tree structure
  */
-const convertPanesToTree = (panes: PaneConfig[], vertical?: boolean): LayoutNode => {
+const convertPanesToTree = (panes: PaneConfig[], vertical?: boolean, defaultSizes?: number[]): LayoutNode => {
   if (panes.length === 0) {
     return { id: 'root', type: 'pane', tabs: [], visible: true };
   }
   if (panes.length === 1) {
     return { type: 'pane', ...panes[0] };
   }
-  // Create a split node with all panes as children
+  // Convert defaultSizes to proportional, or distribute evenly
+  let sizes: number[];
+  if (defaultSizes && defaultSizes.length === panes.length) {
+    const total = defaultSizes.reduce((sum, s) => sum + s, 0);
+    sizes = total > 0 ? defaultSizes.map(s => s / total) : panes.map(() => 1 / panes.length);
+  } else {
+    sizes = panes.map(() => 1 / panes.length);
+  }
   return {
     id: 'root',
     type: 'split',
     direction: vertical ? 'vertical' : 'horizontal',
     children: panes.map(pane => ({ type: 'pane', ...pane })),
-    sizes: panes.map(() => 1 / panes.length),
+    sizes,
   };
 };
 
@@ -121,6 +128,37 @@ const findFirstPane = (node: LayoutNode): LayoutNode | null => {
 };
 
 /**
+ * Check whether a layout node (or any of its descendants) has the given ID
+ */
+const containsPane = (node: LayoutNode, paneId: Id): boolean => {
+  if (node.id === paneId) return true;
+  if (node.children) {
+    return node.children.some(child => containsPane(child, paneId));
+  }
+  return false;
+};
+
+/**
+ * Walk the tree and write liveSizesRef entries into node.sizes so
+ * the tree has accurate proportions (used before maximize to snapshot
+ * current sizes for later restore).
+ */
+const commitLiveSizesToTree = (node: LayoutNode, sizesMap: Map<Id, number[]>): LayoutNode => {
+  if (node.type === 'pane' || !node.children) return node;
+
+  const liveSizes = sizesMap.get(node.id);
+  const newSizes = (liveSizes && liveSizes.length === node.children.length)
+    ? liveSizes
+    : node.sizes;
+
+  return {
+    ...node,
+    sizes: newSizes,
+    children: node.children.map(child => commitLiveSizesToTree(child, sizesMap)),
+  };
+};
+
+/**
  * Find which pane contains a given tab ID
  */
 const findPaneContainingTab = (node: LayoutNode, tabId: Id): LayoutNode | null => {
@@ -159,7 +197,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
     }
     // Convert legacy format
     const panes = initialLayout.panes || [];
-    return convertPanesToTree(panes, initialLayout.vertical);
+    return convertPanesToTree(panes, initialLayout.vertical, initialLayout.defaultSizes);
   });
 
   // Derive panes map from tree
@@ -167,6 +205,11 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
   const [dragData, setDragData] = useState<DragData | null>(null);
   const [dropZone, setDropZone] = useState<DropZoneInfo | null>(null);
+  const [maximizedPaneId, setMaximizedPaneId] = useState<Id | null>(null);
+
+  // Ref to track live Allotment sizes without triggering re-renders.
+  // Structural operations read from this ref to get accurate current sizes.
+  const liveSizesRef = useRef<Map<Id, number[]>>(new Map());
 
   // Notify changes to parent
   const notifyChanges = useCallback(() => {
@@ -183,6 +226,35 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       onTabsChange(tabs);
     }
   }, [rootNode, tabsMap, onLayoutChange, onTabsChange, initialLayout.minSize, initialLayout.maxSize]);
+
+  /**
+   * Update sizes of a split node. Stores in ref (no re-render) so that
+   * structural operations always read accurate, user-dragged sizes.
+   */
+  const updateNodeSizes = useCallback(
+    (nodeId: Id, sizes: number[]) => {
+      const total = sizes.reduce((sum, s) => sum + s, 0);
+      const proportional = total > 0 ? sizes.map(s => s / total) : sizes;
+      liveSizesRef.current.set(nodeId, proportional);
+    },
+    []
+  );
+
+  /**
+   * Maximize a pane.  The entire layout tree stays mounted (CSS handles
+   * visibility), so there is no need to commit sizes — Allotment
+   * instances keep running and liveSizesRef stays accurate.
+   */
+  const maximizePane = useCallback((paneId: Id) => {
+    setMaximizedPaneId(paneId);
+  }, []);
+
+  /**
+   * Restore the layout from maximized state.
+   */
+  const restorePane = useCallback(() => {
+    setMaximizedPaneId(null);
+  }, []);
 
   /**
    * Update a pane in the tree
@@ -208,9 +280,23 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       return null; // Remove this node
     }
     if (node.children) {
-      const newChildren = node.children
-        .map(child => removeNodeFromTree(child, nodeId))
-        .filter((child): child is LayoutNode => child !== null);
+      // Get current sizes (prefer live Allotment sizes from ref)
+      const liveSizes = liveSizesRef.current.get(node.id);
+      const oldSizes = (liveSizes && liveSizes.length === node.children.length)
+        ? liveSizes
+        : node.sizes || node.children.map(() => 1 / node.children!.length);
+
+      const results = node.children.map(child => removeNodeFromTree(child, nodeId));
+
+      // Build new children and surviving sizes together
+      const newChildren: LayoutNode[] = [];
+      const survivingSizes: number[] = [];
+      for (let i = 0; i < results.length; i++) {
+        if (results[i] !== null) {
+          newChildren.push(results[i]!);
+          survivingSizes.push(oldSizes[i] || 0);
+        }
+      }
       
       // If only one child remains in a split, collapse it
       if (newChildren.length === 1 && node.type === 'split') {
@@ -222,8 +308,11 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
         return null;
       }
       
-      // Redistribute sizes evenly
-      const newSizes = newChildren.map(() => 1 / newChildren.length);
+      // Normalize surviving sizes proportionally (freed space is redistributed)
+      const total = survivingSizes.reduce((sum, s) => sum + s, 0);
+      const newSizes = total > 0
+        ? survivingSizes.map(s => s / total)
+        : survivingSizes.map(() => 1 / survivingSizes.length);
       
       return {
         ...node,
@@ -251,17 +340,27 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
     // It's a split node - process children
     if (node.children) {
-      // Recursively clean up children
-      const cleanedChildren = node.children
-        .map(child => cleanupTree(child))
-        .filter(child => {
-          // Filter out empty panes
-          const isEmptyPane = child.type === 'pane' && (child.tabs?.length || 0) === 0;
-          return !isEmptyPane;
-        });
+      // Get current sizes before filtering (prefer live Allotment sizes)
+      const liveSizes = liveSizesRef.current.get(node.id);
+      const oldSizes = (liveSizes && liveSizes.length === node.children.length)
+        ? liveSizes
+        : node.sizes || node.children.map(() => 1 / node.children!.length);
+
+      // Recursively clean up children, tracking survivors and their sizes
+      const cleaned = node.children.map(child => cleanupTree(child));
+      const newChildren: LayoutNode[] = [];
+      const survivingSizes: number[] = [];
+
+      for (let i = 0; i < cleaned.length; i++) {
+        const isEmptyPane = cleaned[i].type === 'pane' && (cleaned[i].tabs?.length || 0) === 0;
+        if (!isEmptyPane) {
+          newChildren.push(cleaned[i]);
+          survivingSizes.push(oldSizes[i] || 0);
+        }
+      }
 
       // If no children remain, create a single empty pane
-      if (cleanedChildren.length === 0) {
+      if (newChildren.length === 0) {
         return {
           id: generateId('pane'),
           type: 'pane',
@@ -271,16 +370,19 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       }
 
       // If only one child remains, collapse this split
-      if (cleanedChildren.length === 1) {
-        return cleanedChildren[0];
+      if (newChildren.length === 1) {
+        return newChildren[0];
       }
 
-      // Redistribute sizes evenly
-      const newSizes = cleanedChildren.map(() => 1 / cleanedChildren.length);
+      // Normalize surviving sizes proportionally
+      const total = survivingSizes.reduce((sum, s) => sum + s, 0);
+      const newSizes = total > 0
+        ? survivingSizes.map(s => s / total)
+        : survivingSizes.map(() => 1 / survivingSizes.length);
 
       return {
         ...node,
-        children: cleanedChildren,
+        children: newChildren,
         sizes: newSizes,
       };
     }
@@ -345,13 +447,22 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
           
           if (targetIndex !== -1 && node.direction === (isVertical ? 'vertical' : 'horizontal')) {
             // Parent has same direction - insert alongside
+            // Get current sizes (prefer live Allotment sizes)
+            const liveSizes = liveSizesRef.current.get(node.id);
+            const currentSizes = (liveSizes && liveSizes.length === node.children.length)
+              ? [...liveSizes]
+              : node.sizes ? [...node.sizes] : node.children.map(() => 1 / node.children!.length);
+
             const newChildren = [...node.children];
-            
+            const newSizes = [...currentSizes];
+
+            // New pane takes half of the target's space
+            const targetSize = newSizes[targetIndex];
+            newSizes[targetIndex] = targetSize / 2;
+
             const insertIndex = isBefore ? targetIndex : targetIndex + 1;
             newChildren.splice(insertIndex, 0, newPane);
-            
-            // Redistribute sizes
-            const newSizes = newChildren.map(() => 1 / newChildren.length);
+            newSizes.splice(insertIndex, 0, targetSize / 2);
             
             return {
               ...node,
@@ -558,8 +669,12 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       setDragData,
       dropZone,
       setDropZone,
+      updateNodeSizes,
+      maximizedPaneId,
+      maximizePane,
+      restorePane,
     }),
-    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone]
+    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone, updateNodeSizes, maximizedPaneId, maximizePane, restorePane]
   );
 
   return (

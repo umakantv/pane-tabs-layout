@@ -1,17 +1,35 @@
-import React, { useCallback, useMemo, useState, useRef } from 'react';
-import { Allotment } from 'allotment';
-import { Tab } from './Tab';
-import { useLayout } from './LayoutContext';
-import type { PaneProps, Id, SplitDirection } from './types';
+import React, { useCallback, useMemo, useState, useRef } from "react";
+import { Allotment } from "allotment";
+import { Tab } from "./Tab";
+import { useLayout } from "./LayoutContext";
+import type { PaneProps, Id, SplitDirection } from "./types";
 
 // Edge threshold for drop zones (percentage of pane size)
 const EDGE_THRESHOLD = 0.25;
 
 export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
-  const { panes, tabs, moveTab, splitPane, activateTab, closeTab, setDragData, dragData, setDropZone, openLink, linkInterception } = useLayout();
+  const {
+    panes,
+    tabs,
+    moveTab,
+    splitPane,
+    activateTab,
+    closeTab,
+    setDragData,
+    dragData,
+    setDropZone,
+    openLink,
+    linkInterception,
+    maximizedPaneId,
+    maximizePane,
+    restorePane,
+  } = useLayout();
+  const isMaximized = maximizedPaneId === paneId;
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [activeDropZone, setActiveDropZone] = useState<SplitDirection | 'center' | null>(null);
+  const [activeDropZone, setActiveDropZone] = useState<
+    SplitDirection | "center" | null
+  >(null);
   const paneRef = useRef<HTMLDivElement>(null);
 
   // Look up pane data from context to always have fresh data
@@ -38,42 +56,45 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
   /**
    * Calculate drop zone based on mouse position within the pane
    */
-  const calculateDropZone = useCallback((e: React.DragEvent): SplitDirection | 'center' => {
-    if (!paneRef.current) return 'center';
-    
-    const rect = paneRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const width = rect.width;
-    const height = rect.height;
-    
-    // Calculate relative position (0-1)
-    const relX = x / width;
-    const relY = y / height;
-    
-    // Check edges first
-    if (relX < EDGE_THRESHOLD) return 'left';
-    if (relX > 1 - EDGE_THRESHOLD) return 'right';
-    if (relY < EDGE_THRESHOLD) return 'top';
-    if (relY > 1 - EDGE_THRESHOLD) return 'bottom';
-    
-    return 'center';
-  }, []);
+  const calculateDropZone = useCallback(
+    (e: React.DragEvent): SplitDirection | "center" => {
+      if (!paneRef.current) return "center";
+
+      const rect = paneRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const width = rect.width;
+      const height = rect.height;
+
+      // Calculate relative position (0-1)
+      const relX = x / width;
+      const relY = y / height;
+
+      // Check edges first
+      if (relX < EDGE_THRESHOLD) return "left";
+      if (relX > 1 - EDGE_THRESHOLD) return "right";
+      if (relY < EDGE_THRESHOLD) return "top";
+      if (relY > 1 - EDGE_THRESHOLD) return "bottom";
+
+      return "center";
+    },
+    []
+  );
 
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      e.dataTransfer.dropEffect = "move";
       setIsDragOver(true);
-      
+
       const dropZone = calculateDropZone(e);
       setActiveDropZone(dropZone);
       setDropZone({ paneId, direction: dropZone });
 
       // Only calculate tab index if in center zone
-      if (dropZone === 'center' && !isCollapsed) {
+      if (dropZone === "center" && !isCollapsed) {
         // Calculate the index where the tab should be dropped
-        const tabElements = e.currentTarget.querySelectorAll('.ptl-tab');
+        const tabElements = e.currentTarget.querySelectorAll(".ptl-tab");
         let targetIndex = paneTabs.length;
 
         for (let i = 0; i < tabElements.length; i++) {
@@ -93,34 +114,37 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
     [calculateDropZone, paneTabs.length, isCollapsed, paneId, setDropZone]
   );
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    // Only clear if we're actually leaving the pane (not entering a child)
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDragOver(false);
-      setDragOverIndex(null);
-      setActiveDropZone(null);
-      setDropZone(null);
-    }
-  }, [setDropZone]);
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      // Only clear if we're actually leaving the pane (not entering a child)
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+        setIsDragOver(false);
+        setDragOverIndex(null);
+        setActiveDropZone(null);
+        setDropZone(null);
+      }
+    },
+    [setDropZone]
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       const dropZone = activeDropZone;
-      
+
       setIsDragOver(false);
       setDragOverIndex(null);
       setActiveDropZone(null);
       setDropZone(null);
 
-      const tabId = e.dataTransfer.getData('text/plain');
+      const tabId = e.dataTransfer.getData("text/plain");
       if (!tabId) return;
 
       const sourcePaneId = dragData?.sourcePaneId;
       if (!sourcePaneId) return;
 
       // Handle split drop
-      if (dropZone && dropZone !== 'center') {
+      if (dropZone && dropZone !== "center") {
         // Don't split if dropping in the same pane and it would be the only tab
         if (sourcePaneId === pane.id) {
           const sourcePane = panes.get(sourcePaneId);
@@ -141,7 +165,8 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
         const currentIndex = pane.tabs.indexOf(tabId);
         if (currentIndex !== -1 && dragOverIndex !== null) {
           // Adjust index if moving within the same pane
-          const adjustedIndex = dragOverIndex > currentIndex ? dragOverIndex - 1 : dragOverIndex;
+          const adjustedIndex =
+            dragOverIndex > currentIndex ? dragOverIndex - 1 : dragOverIndex;
           if (adjustedIndex === currentIndex) {
             setDragData(null);
             return;
@@ -152,7 +177,18 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
       moveTab(tabId, sourcePaneId, pane.id, dragOverIndex ?? undefined);
       setDragData(null);
     },
-    [activeDropZone, dragData, dragOverIndex, moveTab, splitPane, pane.id, pane.tabs, panes, setDragData, setDropZone]
+    [
+      activeDropZone,
+      dragData,
+      dragOverIndex,
+      moveTab,
+      splitPane,
+      pane.id,
+      pane.tabs,
+      panes,
+      setDragData,
+      setDropZone,
+    ]
   );
 
   const handleTabDragStart = useCallback(
@@ -176,7 +212,7 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
    */
   const handleContentClick = useCallback(
     (e: React.MouseEvent) => {
-      if (linkInterception !== 'auto') return;
+      if (linkInterception !== "auto") return;
 
       // If a PaneLink (or other handler) already called preventDefault, skip
       if (e.defaultPrevented) return;
@@ -184,9 +220,9 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
       // Walk up from the click target to find the nearest <a> element
       let target = e.target as HTMLElement;
       while (target && target !== e.currentTarget) {
-        if (target.tagName === 'A') {
+        if (target.tagName === "A") {
           // Skip links explicitly marked as external
-          if (target.hasAttribute('data-ptl-external')) return;
+          if (target.hasAttribute("data-ptl-external")) return;
 
           const href = (target as HTMLAnchorElement).href;
           if (!href) return;
@@ -205,33 +241,60 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
   );
 
   /**
+   * Double-click on the tab bar's empty area toggles maximize/restore.
+   * Clicks on individual tabs or the maximize button itself are ignored.
+   */
+  const handleTabBarDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest(".ptl-tab") || target.closest(".ptl-maximize-btn"))
+        return;
+      if (isMaximized) {
+        restorePane();
+      } else {
+        maximizePane(paneId);
+      }
+    },
+    [isMaximized, maximizePane, restorePane, paneId]
+  );
+
+  const handleMaximizeToggle = useCallback(() => {
+    if (isMaximized) {
+      restorePane();
+    } else {
+      maximizePane(paneId);
+    }
+  }, [isMaximized, maximizePane, restorePane, paneId]);
+
+  /**
    * Get drop zone overlay styles based on active drop zone
    */
   const getDropZoneOverlay = () => {
-    if (!isDragOver || !activeDropZone || activeDropZone === 'center') return null;
-    
-    const baseClass = 'ptl-drop-zone-overlay';
-    
+    if (!isDragOver || !activeDropZone || activeDropZone === "center")
+      return null;
+
+    const baseClass = "ptl-drop-zone-overlay";
+
     switch (activeDropZone) {
-      case 'left':
+      case "left":
         return (
           <div className={`${baseClass} ${baseClass}-left`}>
             <div className="ptl-drop-zone-label">Split Left</div>
           </div>
         );
-      case 'right':
+      case "right":
         return (
           <div className={`${baseClass} ${baseClass}-right`}>
             <div className="ptl-drop-zone-label">Split Right</div>
           </div>
         );
-      case 'top':
+      case "top":
         return (
           <div className={`${baseClass} ${baseClass}-top`}>
             <div className="ptl-drop-zone-label">Split Top</div>
           </div>
         );
-      case 'bottom':
+      case "bottom":
         return (
           <div className={`${baseClass} ${baseClass}-bottom`}>
             <div className="ptl-drop-zone-label">Split Bottom</div>
@@ -251,7 +314,14 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
     >
       <div
         ref={paneRef}
-        className={`ptl-pane ${isDragOver ? 'ptl-pane-drag-over' : ''} ${isCollapsed ? 'ptl-pane-collapsed' : ''} ${activeDropZone && activeDropZone !== 'center' ? 'ptl-pane-split-preview' : ''}`}
+        className={`ptl-pane ${isDragOver ? "ptl-pane-drag-over" : ""} ${
+          isCollapsed ? "ptl-pane-collapsed" : ""
+        } ${
+          activeDropZone && activeDropZone !== "center"
+            ? "ptl-pane-split-preview"
+            : ""
+        }`}
+        data-maximized={isMaximized || undefined}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -260,16 +330,23 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
         {isCollapsed ? (
           <div className="ptl-collapsed-content">
             <div className="ptl-collapsed-label">Drop tabs here</div>
-            {isDragOver && activeDropZone === 'center' && <div className="ptl-drop-zone-active">Release to add tab</div>}
+            {isDragOver && activeDropZone === "center" && (
+              <div className="ptl-drop-zone-active">Release to add tab</div>
+            )}
           </div>
         ) : (
           <>
-            <div className="ptl-tab-bar">
+            <div
+              className="ptl-tab-bar"
+              onDoubleClick={handleTabBarDoubleClick}
+            >
               {paneTabs.map((tab, index) => (
                 <React.Fragment key={tab.id}>
-                  {isDragOver && activeDropZone === 'center' && dragOverIndex === index && (
-                    <div className="ptl-drop-indicator" />
-                  )}
+                  {isDragOver &&
+                    activeDropZone === "center" &&
+                    dragOverIndex === index && (
+                      <div className="ptl-drop-indicator" />
+                    )}
                   <Tab
                     tab={tab}
                     isActive={pane.activeTab === tab.id}
@@ -281,9 +358,47 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                   />
                 </React.Fragment>
               ))}
-              {isDragOver && activeDropZone === 'center' && dragOverIndex === paneTabs.length && (
-                <div className="ptl-drop-indicator" />
-              )}
+              {isDragOver &&
+                activeDropZone === "center" &&
+                dragOverIndex === paneTabs.length && (
+                  <div className="ptl-drop-indicator" />
+                )}
+              <button
+                className="ptl-maximize-btn"
+                onClick={handleMaximizeToggle}
+                title={isMaximized ? "Restore pane" : "Maximize pane"}
+                aria-label={isMaximized ? "Restore pane" : "Maximize pane"}
+              >
+                {isMaximized ? (
+                  <svg
+                    xmlns="http://www.w3.org"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 14h6v6m10-6h-6v6M4 10h6V4m10 6h-6V4" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  </svg>
+                )}
+              </button>
             </div>
             <div className="ptl-pane-content" onClick={handleContentClick}>
               {activeTabData ? (

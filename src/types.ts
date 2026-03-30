@@ -172,6 +172,14 @@ export interface LayoutContextValue {
   dropZone: DropZoneInfo | null;
   /** Set drop zone info */
   setDropZone: (zone: DropZoneInfo | null) => void;
+  /** Update sizes of a split node (used internally by Allotment onChange) */
+  updateNodeSizes: (nodeId: Id, sizes: number[]) => void;
+  /** The currently maximized pane ID, or null if no pane is maximized */
+  maximizedPaneId: Id | null;
+  /** Maximize a pane to fill the entire layout */
+  maximizePane: (paneId: Id) => void;
+  /** Restore the layout from maximized state */
+  restorePane: () => void;
 }
 
 /**

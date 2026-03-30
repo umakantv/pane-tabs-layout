@@ -139,6 +139,55 @@
   opacity: 1;
 }
 
+/* Maximize / Restore Button */
+.ptl-maximize-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--ptl-tab-text, #969696);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ptl-maximize-btn:hover {
+  background-color: var(--ptl-tab-hover-bg, #2a2d2e);
+  color: var(--ptl-tab-active-text, #ffffff);
+}
+
+.ptl-maximize-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- Maximize state ---- */
+/* When a pane is maximized the entire layout tree (including Allotment
+   sashes) is hidden via inherited visibility.  The maximized pane then
+   overrides with visibility:visible and position:fixed so it fills the
+   layout container area.  Nothing unmounts — scroll positions, component
+   state, and canvas/chart content are all preserved. */
+
+.ptl-layout[data-maximized-pane] > * {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.ptl-pane[data-maximized] {
+  visibility: visible;
+  pointer-events: auto;
+  position: fixed;
+  top: var(--ptl-maximize-top, 0px);
+  left: var(--ptl-maximize-left, 0px);
+  width: var(--ptl-maximize-width, 100vw);
+  height: var(--ptl-maximize-height, 100vh);
+  z-index: 10;
+}
+
 /* Drop Indicator */
 .ptl-drop-indicator {
   width: 2px;
