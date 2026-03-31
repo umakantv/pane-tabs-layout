@@ -159,6 +159,20 @@ const commitLiveSizesToTree = (node: LayoutNode, sizesMap: Map<Id, number[]>): L
 };
 
 /**
+ * Count pinned tabs in a pane's tab list, using the tabs map for pin state.
+ * Optionally exclude a specific tab ID from the count.
+ */
+const countPinnedTabs = (tabIds: Id[], tabsMap: Map<Id, TabData>, excludeId?: Id): number => {
+  let count = 0;
+  for (const id of tabIds) {
+    if (id === excludeId) continue;
+    const t = tabsMap.get(id);
+    if (t?.pinned) count++;
+  }
+  return count;
+};
+
+/**
  * Find which pane contains a given tab ID
  */
 const findPaneContainingTab = (node: LayoutNode, tabId: Id): LayoutNode | null => {
@@ -500,9 +514,20 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
             if (currentIndex === -1) return pane;
             
             const newTabs = tabs.filter(t => t !== tabId);
-            const insertIndex = targetIndex !== undefined 
+            let insertIndex = targetIndex !== undefined 
               ? (targetIndex > currentIndex ? targetIndex - 1 : targetIndex)
               : newTabs.length;
+
+            // Enforce pin boundaries: pinned tabs stay in [0, pinnedCount],
+            // unpinned tabs stay in [pinnedCount, length]
+            const movedTab = tabsMap.get(tabId);
+            const pinnedCount = countPinnedTabs(newTabs, tabsMap);
+            if (movedTab?.pinned) {
+              insertIndex = Math.max(0, Math.min(insertIndex, pinnedCount));
+            } else {
+              insertIndex = Math.max(pinnedCount, Math.min(insertIndex, newTabs.length));
+            }
+
             newTabs.splice(insertIndex, 0, tabId);
             
             return { ...pane, tabs: newTabs };
@@ -523,7 +548,20 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
           
           newRoot = updatePaneInTree(newRoot, toPaneId, (pane) => {
             const tabs = pane.tabs || [];
-            const insertIndex = targetIndex !== undefined ? targetIndex : tabs.length;
+            const movedTab = tabsMap.get(tabId);
+            const pinnedCount = countPinnedTabs(tabs, tabsMap);
+
+            let insertIndex: number;
+            if (movedTab?.pinned) {
+              // Pinned tabs always go to the end of the pinned group
+              insertIndex = pinnedCount;
+            } else {
+              // Unpinned tabs respect targetIndex but stay in unpinned zone
+              insertIndex = targetIndex !== undefined
+                ? Math.max(pinnedCount, Math.min(targetIndex, tabs.length))
+                : tabs.length;
+            }
+
             const newTabs = [...tabs];
             newTabs.splice(insertIndex, 0, tabId);
             return {
@@ -541,7 +579,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, updatePaneInTree, cleanupTree]
+    [notifyChanges, updatePaneInTree, cleanupTree, tabsMap]
   );
 
   const activateTab = useCallback(
@@ -592,17 +630,31 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       });
 
       setRootNode((prevRoot) => {
-        return updatePaneInTree(prevRoot, paneId, (pane) => ({
-          ...pane,
-          tabs: [...(pane.tabs || []), tab.id],
-          activeTab: activate ? tab.id : pane.activeTab,
-          visible: true,
-        }));
+        return updatePaneInTree(prevRoot, paneId, (pane) => {
+          const currentTabs = pane.tabs || [];
+          const newTabs = [...currentTabs];
+
+          if (tab.pinned) {
+            // Insert pinned tab at end of pinned group
+            const pinnedCount = countPinnedTabs(currentTabs, tabsMap);
+            newTabs.splice(pinnedCount, 0, tab.id);
+          } else {
+            // Unpinned tabs append to end (default behavior)
+            newTabs.push(tab.id);
+          }
+
+          return {
+            ...pane,
+            tabs: newTabs,
+            activeTab: activate ? tab.id : pane.activeTab,
+            visible: true,
+          };
+        });
       });
 
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, updatePaneInTree]
+    [notifyChanges, updatePaneInTree, tabsMap]
   );
 
   const removePane = useCallback(
@@ -613,6 +665,72 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       setTimeout(notifyChanges, 0);
     },
     [notifyChanges, removeNodeFromTree]
+  );
+
+  /**
+   * Pin a tab: marks it as pinned and moves it to the end of the pinned group.
+   */
+  const pinTab = useCallback(
+    (paneId: Id, tabId: Id) => {
+      setTabsMap((prev) => {
+        const newMap = new Map(prev);
+        const tab = newMap.get(tabId);
+        if (tab && !tab.pinned) {
+          newMap.set(tabId, { ...tab, pinned: true });
+        }
+        return newMap;
+      });
+
+      setRootNode((prevRoot) => {
+        return updatePaneInTree(prevRoot, paneId, (pane) => {
+          const currentTabs = pane.tabs || [];
+          // Count pinned tabs excluding the one being pinned (it isn't pinned in tabsMap yet due to batching)
+          const pinnedCount = countPinnedTabs(currentTabs, tabsMap, tabId);
+
+          const newTabs = currentTabs.filter((id) => id !== tabId);
+          // Insert at end of pinned group
+          newTabs.splice(pinnedCount, 0, tabId);
+
+          return { ...pane, tabs: newTabs };
+        });
+      });
+
+      setTimeout(notifyChanges, 0);
+    },
+    [notifyChanges, updatePaneInTree, tabsMap]
+  );
+
+  /**
+   * Unpin a tab: marks it as unpinned and moves it to the start of the unpinned group.
+   */
+  const unpinTab = useCallback(
+    (paneId: Id, tabId: Id) => {
+      setTabsMap((prev) => {
+        const newMap = new Map(prev);
+        const tab = newMap.get(tabId);
+        if (tab && tab.pinned) {
+          newMap.set(tabId, { ...tab, pinned: false });
+        }
+        return newMap;
+      });
+
+      setRootNode((prevRoot) => {
+        return updatePaneInTree(prevRoot, paneId, (pane) => {
+          const currentTabs = pane.tabs || [];
+          // Count pinned tabs excluding the one being unpinned (it is still pinned in tabsMap due to batching)
+          const pinnedCount = countPinnedTabs(currentTabs, tabsMap, tabId);
+
+          const newTabs = currentTabs.filter((id) => id !== tabId);
+          // Insert right after remaining pinned tabs (start of unpinned group)
+          newTabs.splice(pinnedCount, 0, tabId);
+
+          return { ...pane, tabs: newTabs };
+        });
+      });
+
+      setTimeout(notifyChanges, 0);
+    },
+    [notifyChanges, updatePaneInTree, tabsMap]
   );
 
   /**
@@ -673,8 +791,10 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       maximizedPaneId,
       maximizePane,
       restorePane,
+      pinTab,
+      unpinTab,
     }),
-    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone, updateNodeSizes, maximizedPaneId, maximizePane, restorePane]
+    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone, updateNodeSizes, maximizedPaneId, maximizePane, restorePane, pinTab, unpinTab]
   );
 
   return (

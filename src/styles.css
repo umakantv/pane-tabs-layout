@@ -139,6 +139,57 @@
   opacity: 1;
 }
 
+/* Pinned Tab */
+.ptl-tab-pinned {
+  min-width: auto;
+  border-top: 2px solid var(--ptl-tab-pinned-indicator, var(--ptl-tab-active-border, #007acc));
+  padding-top: 6px;
+}
+
+/* Pin toggle button — shown on every tab on hover */
+.ptl-tab-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+/* Reveal on hover for ALL tabs (pinned and unpinned) */
+.ptl-tab:hover .ptl-tab-pin {
+  opacity: 0.5;
+}
+
+/* Pinned tabs: also reveal when active (not just hover), and show bolder */
+.ptl-tab-pinned:hover .ptl-tab-pin,
+.ptl-tab-pinned.ptl-tab-active .ptl-tab-pin {
+  opacity: 0.8;
+}
+
+.ptl-tab-pin:hover {
+  background-color: var(--ptl-tab-hover-bg, #2a2d2e);
+  opacity: 1;
+}
+
+/* Separator between pinned and unpinned tabs */
+.ptl-pin-separator {
+  width: 1px;
+  height: 20px;
+  background-color: var(--ptl-pin-separator-color, var(--ptl-border-color, #3c3c3c));
+  margin: 0 2px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
 /* Maximize / Restore Button */
 .ptl-maximize-btn {
   display: flex;
@@ -293,6 +344,10 @@
   /* Content */
   --ptl-content-padding: 0;
   --ptl-empty-state-color: #6e6e6e;
+
+  /* Pinned Tabs */
+  --ptl-tab-pinned-indicator: #007acc;
+  --ptl-pin-separator-color: #3c3c3c;
 }
 
 /* Light theme support */
@@ -316,6 +371,44 @@
   --ptl-scrollbar-thumb: #c1c1c1;
   
   --ptl-empty-state-color: #999999;
+
+  --ptl-tab-pinned-indicator: #007acc;
+  --ptl-pin-separator-color: #d4d4d4;
+}
+
+/* Tab Context Menu */
+.ptl-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 160px;
+  background-color: var(--ptl-context-menu-bg, var(--ptl-tab-bar-bg, #252526));
+  border: 1px solid var(--ptl-context-menu-border, var(--ptl-border-color, #3c3c3c));
+  border-radius: 4px;
+  padding: 4px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  color: var(--ptl-text-color, #cccccc);
+  font-size: 13px;
+  user-select: none;
+}
+
+.ptl-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 24px 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.1s ease;
+}
+
+.ptl-context-menu-item:hover {
+  background-color: var(--ptl-context-menu-hover, rgba(0, 122, 204, 0.3));
+}
+
+.ptl-context-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background-color: var(--ptl-border-color, #3c3c3c);
 }
 
 /* Drop Zone Overlays */

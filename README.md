@@ -19,6 +19,7 @@ A production-ready React component library for creating sophisticated split-pane
 - 🔗 **Link Interception** - Automatically open matching links as tabs with custom resolver
 - 📝 **TypeScript First** - 100% TypeScript with comprehensive type definitions
 - 🚀 **Production Ready** - Battle-tested with automated testing and strict type checking
+- 📌 **Tab Pinning** - Pin important tabs to the start of the tab bar with visual separation, drag boundaries, and programmatic pin/unpin control — just like VS Code.
 - 🔲 **Maximize / Restore Panes** - Double-click the empty tab bar area or click the maximize/restore button (top-right of tab bar) to toggle a pane between normal and maximized (full viewport) states.## 📦 Installation
 
 ```sh
@@ -101,6 +102,46 @@ Unlike traditional split-pane libraries limited to 2 panes, Pane Tabs Layout sup
 
 The layout automatically manages the tree structure, collapsing unnecessary splits when panes are removed.
 
+### Tab Pinning
+
+Pin important tabs to keep them always visible and grouped at the left of the tab bar — just like in VS Code. Pinned tabs cannot be closed via the UI and stay separated from unpinned tabs during drag-and-drop.
+
+```tsx
+const tabs: TabData[] = [
+  {
+    id: 'editor',
+    title: 'Editor',
+    content: <CodeEditor />,
+    pinned: true, // ← Pinned to the left
+  },
+  {
+    id: 'console',
+    title: 'Console',
+    content: <ConsoleOutput />,
+  },
+];
+
+// Programmatically pin/unpin tabs
+function MyComponent() {
+  const { pinTab, unpinTab } = useLayout();
+
+  return (
+    <>
+      <button onClick={() => pinTab('main-pane', 'console')}>Pin Console</button>
+      <button onClick={() => unpinTab('main-pane', 'editor')}>Unpin Editor</button>
+    </>
+  );
+}
+```
+
+**Pinning behavior:**
+- **Right-click any tab** to open a context menu with **Pin Tab** / **Unpin Tab** (and **Close Tab**)
+- Pinned tabs are always grouped at the **start** of the tab bar
+- A **visual separator** divides pinned tabs from unpinned tabs
+- Pinned tabs show a **pin indicator** instead of a close button (click the indicator to unpin)
+- **Drag boundaries** are enforced: pinned tabs stay in the pinned zone, unpinned tabs stay in the unpinned zone
+- Pin state is **persisted** via `onTabsChange` (the `pinned` field is included in `TabData`)
+
 ### Tab Data & Metadata
 
 Attach any serializable data to tabs for dynamic content rendering:
@@ -173,6 +214,8 @@ interface TabData {
   closable?: boolean;
   /** Allow dragging the tab (default: true) */
   draggable?: boolean;
+  /** Pin the tab to the start of the tab bar (default: false) */
+  pinned?: boolean;
   /** Custom data attached to the tab */
   data?: Record<string, unknown>;
 }
@@ -262,6 +305,10 @@ Pane Tabs Layout uses CSS custom properties for complete visual customization:
   /* Content */
   --ptl-content-padding: 0;
   --ptl-empty-state-color: #6e6e6e;
+
+  /* Pinned Tabs */
+  --ptl-tab-pinned-indicator: #007acc;
+  --ptl-pin-separator-color: #3c3c3c;
 }
 ```
 
@@ -406,6 +453,8 @@ function MyComponent() {
     removePane,     // Remove a pane
     maximizePane,   // Toggle pane maximize/restore
     openLink,       // Open a URL as a tab (uses onOpenLink resolver)
+    pinTab,         // Pin a tab to the start of the tab bar
+    unpinTab,       // Unpin a tab
   } = useLayout();
   
 // Example: Toggle pane maximize
