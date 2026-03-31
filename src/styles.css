@@ -89,8 +89,8 @@
 .ptl-tab-active {
   background-color: var(--ptl-tab-active-bg, #1e1e1e);
   color: var(--ptl-tab-active-text, #ffffff);
-  border-bottom: 1px solid var(--ptl-tab-active-border, #007acc);
-  margin-bottom: -1px;
+  border-top: 1px solid var(--ptl-tab-active-border, #007acc);
+  margin-top: -1px;
 }
 
 .ptl-tab-dragging {
@@ -137,6 +137,53 @@
   background-color: var(--ptl-close-hover-bg, #c75450);
   color: var(--ptl-close-hover-text, #ffffff);
   opacity: 1;
+}
+
+/* Pinned Tab Styles */
+.ptl-tab-pinned {
+  font-weight: 600;
+}
+
+.ptl-tab-pinned .ptl-tab-title {
+  /* Slightly bolder look for pinned tabs */
+}
+
+/* Note: Pinned tabs no longer have extra borders — only the active tab's
+   blue border-bottom applies (via .ptl-tab-active) when selected. */
+
+/* Pin Button */
+.ptl-tab-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.ptl-tab:hover .ptl-tab-pin,
+.ptl-tab-active .ptl-tab-pin,
+.ptl-tab-pinned .ptl-tab-pin {
+  opacity: 0.7;
+}
+
+.ptl-tab-pin:hover {
+  background-color: var(--ptl-tab-hover-bg, #2a2d2e);
+  color: var(--ptl-tab-active-text, #ffffff);
+  opacity: 1;
+}
+
+.ptl-tab-pin-active {
+  opacity: 1;
+  color: var(--ptl-tab-active-border, #007acc);
 }
 
 /* Maximize / Restore Button */

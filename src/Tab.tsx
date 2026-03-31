@@ -7,6 +7,8 @@ export const Tab: React.FC<TabProps> = ({
   isDragging = false,
   onClick,
   onClose,
+  onPin,
+  onUnpin,
   onDragStart,
   onDragEnd,
 }) => {
@@ -16,6 +18,18 @@ export const Tab: React.FC<TabProps> = ({
       onClose?.();
     },
     [onClose]
+  );
+
+  const handlePinToggle = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (tab.pinned) {
+        onUnpin?.();
+      } else {
+        onPin?.();
+      }
+    },
+    [tab.pinned, onPin, onUnpin]
   );
 
   const handleDragStart = useCallback(
@@ -37,10 +51,16 @@ export const Tab: React.FC<TabProps> = ({
   );
 
   const draggable = tab.draggable !== false;
+  const isPinned = tab.pinned === true;
+
+  // For pinned tabs: show pin icon (clicking unpins). Close only if explicitly closable:true.
+  // For unpinned tabs: show close button (and pin icon on hover via CSS class)
+  const showClose = !isPinned && tab.closable !== false && onClose;
+  const showPin = isPinned || onPin; // always show pin affordance if pinned or pin handler exists
 
   return (
     <div
-      className={`ptl-tab ${isActive ? 'ptl-tab-active' : ''} ${isDragging ? 'ptl-tab-dragging' : ''}`}
+      className={`ptl-tab ${isActive ? 'ptl-tab-active' : ''} ${isDragging ? 'ptl-tab-dragging' : ''} ${isPinned ? 'ptl-tab-pinned' : ''}`}
       onClick={onClick}
       draggable={draggable}
       onDragStart={handleDragStart}
@@ -48,10 +68,35 @@ export const Tab: React.FC<TabProps> = ({
       role="tab"
       aria-selected={isActive}
       data-tab-id={tab.id}
+      data-pinned={isPinned || undefined}
     >
       {tab.icon && <span className="ptl-tab-icon">{tab.icon}</span>}
       <span className="ptl-tab-title">{tab.title}</span>
-      {tab.closable !== false && onClose && (
+      {/* Pin/Unpin button */}
+      {showPin && (
+        <button
+          className={`ptl-tab-pin ${isPinned ? 'ptl-tab-pin-active' : ''}`}
+          onClick={handlePinToggle}
+          aria-label={isPinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
+          type="button"
+          title={isPinned ? 'Unpin tab' : 'Pin tab'}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 2L15 5V9.5C15 10.88 16.12 12 17.5 12H19L18 21H6L5 12H6.5C7.88 12 9 10.88 9 9.5V5L12 2Z"
+              fill="currentColor"
+            />
+          </svg>
+        </button>
+      )}
+      {/* Close button (hidden for pinned tabs unless closable:true) */}
+      {showClose && (
         <button
           className="ptl-tab-close"
           onClick={handleClose}

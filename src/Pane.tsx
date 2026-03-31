@@ -15,6 +15,8 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
     splitPane,
     activateTab,
     closeTab,
+    pinTab,
+    unpinTab,
     setDragData,
     dragData,
     setDropZone,
@@ -54,11 +56,27 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
   const isCollapsed = pane.visible === false || pane.tabs.length === 0;
 
   /**
-   * Calculate drop zone based on mouse position within the pane
+   * Calculate drop zone based on mouse position within the pane.
+   * If the mouse is over the tab bar (header), always return "center" so that
+   * only tab reordering dropzones are shown there, not split-pane dropzones.
    */
   const calculateDropZone = useCallback(
     (e: React.DragEvent): SplitDirection | "center" => {
       if (!paneRef.current) return "center";
+
+      // If hovering over the tab bar, only allow center (tab reordering) — no splits
+      const tabBar = paneRef.current.querySelector('.ptl-tab-bar');
+      if (tabBar) {
+        const tabBarRect = tabBar.getBoundingClientRect();
+        if (
+          e.clientX >= tabBarRect.left &&
+          e.clientX <= tabBarRect.right &&
+          e.clientY >= tabBarRect.top &&
+          e.clientY <= tabBarRect.bottom
+        ) {
+          return "center";
+        }
+      }
 
       const rect = paneRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -353,6 +371,8 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                     isDragging={dragData?.tabId === tab.id}
                     onClick={() => activateTab(pane.id, tab.id)}
                     onClose={() => closeTab(pane.id, tab.id)}
+                    onPin={() => pinTab(pane.id, tab.id)}
+                    onUnpin={() => unpinTab(pane.id, tab.id)}
                     onDragStart={() => handleTabDragStart(tab.id)}
                     onDragEnd={handleTabDragEnd}
                   />

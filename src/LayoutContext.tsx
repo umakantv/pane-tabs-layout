@@ -491,6 +491,10 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
   const moveTab = useCallback(
     (tabId: Id, fromPaneId: Id, toPaneId: Id, targetIndex?: number) => {
+      // Get pinned status of the tab being moved
+      const movingTab = tabsMap.get(tabId);
+      const isPinned = movingTab?.pinned === true;
+
       if (fromPaneId === toPaneId) {
         // Reordering within same pane - update the tree
         setRootNode((prevRoot) => {
@@ -500,9 +504,34 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
             if (currentIndex === -1) return pane;
             
             const newTabs = tabs.filter(t => t !== tabId);
-            const insertIndex = targetIndex !== undefined 
-              ? (targetIndex > currentIndex ? targetIndex - 1 : targetIndex)
-              : newTabs.length;
+
+            // Compute valid insert range based on pinned status
+            let minIndex = 0;
+            let maxIndex = newTabs.length;
+            if (isPinned) {
+              // Pinned tabs can be placed anywhere within the pinned region [0, numPinned]
+              // where numPinned is the count of pinned tabs in newTabs (after removal)
+              const numPinned = newTabs.filter(t => tabsMap.get(t)?.pinned).length;
+              minIndex = 0;
+              maxIndex = numPinned;
+            } else {
+              // Unpinned tabs stay after last pinned
+              for (let i = 0; i < newTabs.length; i++) {
+                const t = tabsMap.get(newTabs[i]);
+                if (t && t.pinned) minIndex = i + 1;
+                else break;
+              }
+            }
+
+            let insertIndex: number;
+            if (targetIndex !== undefined) {
+              // Adjust for removal
+              const adjustedTarget = targetIndex > currentIndex ? targetIndex - 1 : targetIndex;
+              insertIndex = Math.max(minIndex, Math.min(adjustedTarget, maxIndex));
+            } else {
+              insertIndex = isPinned ? minIndex : maxIndex;
+            }
+
             newTabs.splice(insertIndex, 0, tabId);
             
             return { ...pane, tabs: newTabs };
@@ -523,7 +552,29 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
           
           newRoot = updatePaneInTree(newRoot, toPaneId, (pane) => {
             const tabs = pane.tabs || [];
-            const insertIndex = targetIndex !== undefined ? targetIndex : tabs.length;
+            // Determine valid insert position based on pinned status
+            let minIndex = 0;
+            let maxIndex = tabs.length;
+            if (isPinned) {
+              // Pinned tabs can be placed anywhere within the pinned region
+              const numPinned = tabs.filter(t => tabsMap.get(t)?.pinned).length;
+              minIndex = 0;
+              maxIndex = numPinned;
+            } else {
+              for (let i = 0; i < tabs.length; i++) {
+                const t = tabsMap.get(tabs[i]);
+                if (t && t.pinned) minIndex = i + 1;
+                else break;
+              }
+            }
+
+            let insertIndex: number;
+            if (targetIndex !== undefined) {
+              insertIndex = Math.max(minIndex, Math.min(targetIndex, maxIndex));
+            } else {
+              insertIndex = isPinned ? minIndex : maxIndex;
+            }
+
             const newTabs = [...tabs];
             newTabs.splice(insertIndex, 0, tabId);
             return {
@@ -541,7 +592,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, updatePaneInTree, cleanupTree]
+    [notifyChanges, updatePaneInTree, cleanupTree, tabsMap]
   );
 
   const activateTab = useCallback(
@@ -559,6 +610,13 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
 
   const closeTab = useCallback(
     (paneId: Id, tabId: Id) => {
+      // Check if tab is pinned — by default pinned tabs are not closable
+      const tab = tabsMap.get(tabId);
+      if (tab?.pinned && tab?.closable !== true) {
+        // Pinned and not explicitly closable — don't close
+        return;
+      }
+
       setRootNode((prevRoot) => {
         const newRoot = updatePaneInTree(prevRoot, paneId, (pane) => {
           const newTabs = (pane.tabs || []).filter((id) => id !== tabId);
@@ -580,7 +638,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       });
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, updatePaneInTree, removeNodeFromTree]
+    [notifyChanges, updatePaneInTree, removeNodeFromTree, tabsMap]
   );
 
   const addTab = useCallback(
@@ -592,17 +650,36 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       });
 
       setRootNode((prevRoot) => {
-        return updatePaneInTree(prevRoot, paneId, (pane) => ({
-          ...pane,
-          tabs: [...(pane.tabs || []), tab.id],
-          activeTab: activate ? tab.id : pane.activeTab,
-          visible: true,
-        }));
+        return updatePaneInTree(prevRoot, paneId, (pane) => {
+          const tabs = pane.tabs || [];
+          // Determine insert position: pinned tabs go after last pinned tab, unpinned at end
+          let insertIndex = tabs.length;
+          if (tab.pinned) {
+            // Find position after last pinned tab
+            insertIndex = 0;
+            for (let i = 0; i < tabs.length; i++) {
+              const t = tabsMap.get(tabs[i]);
+              if (t && t.pinned) {
+                insertIndex = i + 1;
+              } else {
+                break;
+              }
+            }
+          }
+          const newTabs = [...tabs];
+          newTabs.splice(insertIndex, 0, tab.id);
+          return {
+            ...pane,
+            tabs: newTabs,
+            activeTab: activate ? tab.id : pane.activeTab,
+            visible: true,
+          };
+        });
       });
 
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, updatePaneInTree]
+    [notifyChanges, updatePaneInTree, tabsMap]
   );
 
   const removePane = useCallback(
@@ -613,6 +690,94 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       setTimeout(notifyChanges, 0);
     },
     [notifyChanges, removeNodeFromTree]
+  );
+
+  /**
+   * Pin a tab: set pinned=true on the tab data and move it to the front of its pane.
+   */
+  const pinTab = useCallback(
+    (paneId: Id, tabId: Id) => {
+      // Update tab data to pinned
+      setTabsMap((prev) => {
+        const tab = prev.get(tabId);
+        if (!tab) return prev;
+        const newMap = new Map(prev);
+        newMap.set(tabId, { ...tab, pinned: true });
+        return newMap;
+      });
+
+      // Move tab to the front of its pane (before any unpinned tabs)
+      setRootNode((prevRoot) => {
+        return updatePaneInTree(prevRoot, paneId, (pane) => {
+          const tabs = pane.tabs || [];
+          const currentIndex = tabs.indexOf(tabId);
+          if (currentIndex === -1) return pane;
+
+          // Remove and re-insert at the position after the last pinned tab (or position 0)
+          const newTabs = tabs.filter((t) => t !== tabId);
+          // Find first unpinned tab index to insert before it
+          let insertIndex = 0;
+          for (let i = 0; i < newTabs.length; i++) {
+            const t = tabsMap.get(newTabs[i]);
+            if (t && t.pinned) {
+              insertIndex = i + 1;
+            } else {
+              break;
+            }
+          }
+          newTabs.splice(insertIndex, 0, tabId);
+          return { ...pane, tabs: newTabs };
+        });
+      });
+
+      setTimeout(notifyChanges, 0);
+    },
+    [notifyChanges, updatePaneInTree, tabsMap]
+  );
+
+  /**
+   * Unpin a tab: set pinned=false on the tab data and move it to the unpinned region
+   * (after all remaining pinned tabs).
+   */
+  const unpinTab = useCallback(
+    (paneId: Id, tabId: Id) => {
+      // Update tab data to unpinned
+      setTabsMap((prev) => {
+        const tab = prev.get(tabId);
+        if (!tab) return prev;
+        const newMap = new Map(prev);
+        newMap.set(tabId, { ...tab, pinned: false });
+        return newMap;
+      });
+
+      // Move tab to the start of the unpinned region (after all pinned tabs)
+      setRootNode((prevRoot) => {
+        return updatePaneInTree(prevRoot, paneId, (pane) => {
+          const tabs = pane.tabs || [];
+          const currentIndex = tabs.indexOf(tabId);
+          if (currentIndex === -1) return pane;
+
+          // Remove and re-insert after the last pinned tab
+          const newTabs = tabs.filter((t) => t !== tabId);
+          // Find the position right after the last pinned tab
+          let insertIndex = 0;
+          for (let i = 0; i < newTabs.length; i++) {
+            const t = tabsMap.get(newTabs[i]);
+            if (t && t.pinned) {
+              insertIndex = i + 1;
+            } else {
+              break;
+            }
+          }
+          // Insert the now-unpinned tab at the start of the unpinned section
+          newTabs.splice(insertIndex, 0, tabId);
+          return { ...pane, tabs: newTabs };
+        });
+      });
+
+      setTimeout(notifyChanges, 0);
+    },
+    [notifyChanges, updatePaneInTree, tabsMap]
   );
 
   /**
@@ -663,6 +828,8 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       closeTab,
       addTab,
       removePane,
+      pinTab,
+      unpinTab,
       openLink,
       linkInterception,
       dragData,
@@ -674,7 +841,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       maximizePane,
       restorePane,
     }),
-    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone, updateNodeSizes, maximizedPaneId, maximizePane, restorePane]
+    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, pinTab, unpinTab, openLink, linkInterception, dragData, dropZone, updateNodeSizes, maximizedPaneId, maximizePane, restorePane]
   );
 
   return (

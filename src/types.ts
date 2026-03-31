@@ -26,6 +26,8 @@ export interface TabData {
   closable?: boolean;
   /** Whether the tab can be dragged to other panes */
   draggable?: boolean;
+  /** Whether the tab is pinned (stays at the front, not closable by default) */
+  pinned?: boolean;
   /** Additional data associated with the tab */
   data?: Record<string, unknown>;
 }
@@ -156,6 +158,10 @@ export interface LayoutContextValue {
   addTab: (paneId: Id, tab: TabData, activate?: boolean) => void;
   /** Remove a pane (merges with sibling if possible) */
   removePane: (paneId: Id) => void;
+  /** Pin a tab (moves it to the front of the pane and prevents closing) */
+  pinTab: (paneId: Id, tabId: Id) => void;
+  /** Unpin a tab (allows it to be moved freely and closed) */
+  unpinTab: (paneId: Id, tabId: Id) => void;
   /**
    * Open a link as a tab. Calls the user-provided onOpenLink resolver.
    * If the resolver returns a TabData, the tab is added (or activated if it already exists).
@@ -245,6 +251,10 @@ export interface TabProps {
   onClick?: () => void;
   /** Close handler */
   onClose?: () => void;
+  /** Pin handler (for unpinned tabs) */
+  onPin?: () => void;
+  /** Unpin handler (for pinned tabs) */
+  onUnpin?: () => void;
   /** Drag start handler */
   onDragStart?: () => void;
   /** Drag end handler */
