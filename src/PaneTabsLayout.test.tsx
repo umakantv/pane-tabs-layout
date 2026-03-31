@@ -550,6 +550,66 @@ describe('PaneTabsLayout', () => {
     expect(document.querySelector('.ptl-pane')).toBeInTheDocument();
   });
 
+  it('dragging over the tab bar header does not activate split zones', async () => {
+    render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+      />
+    );
+
+    const tab2Element = screen.getByText('Tab 2');
+    const paneElement = document.querySelector('.ptl-pane')!;
+    const tabBarElement = document.querySelector('.ptl-tab-bar')!;
+
+    // Mock pane rect: full pane is 400×300
+    Object.defineProperty(paneElement, 'getBoundingClientRect', {
+      value: () => ({
+        left: 0, top: 0, right: 400, bottom: 300,
+        width: 400, height: 300, x: 0, y: 0, toJSON: () => {},
+      }),
+      configurable: true,
+    });
+
+    // Mock tab bar rect: tab bar occupies top 35px of the pane
+    Object.defineProperty(tabBarElement, 'getBoundingClientRect', {
+      value: () => ({
+        left: 0, top: 0, right: 400, bottom: 35,
+        width: 400, height: 35, x: 0, y: 0, toJSON: () => {},
+      }),
+      configurable: true,
+    });
+
+    // Start drag on Tab 2
+    fireEvent.dragStart(tab2Element, {
+      dataTransfer: {
+        setData: vi.fn(),
+        effectAllowed: 'move',
+      },
+    });
+
+    // Drag over the LEFT EDGE of the TAB BAR (clientY=20 is within tab bar, clientX=5 is left edge)
+    // Without the fix this would trigger "Split Left"; with the fix it stays "center" (reorder only).
+    fireEvent.dragOver(paneElement, {
+      clientX: 5,
+      clientY: 20,
+      dataTransfer: {
+        dropEffect: 'move',
+        getData: vi.fn().mockReturnValue('tab2'),
+      },
+    });
+
+    // Verify the drag handler fired (drag-over styling applied)
+    await waitFor(() => {
+      expect(paneElement).toHaveClass('ptl-pane-drag-over');
+    });
+
+    // Should NOT show any split zone overlay because we're within the tab bar
+    expect(document.querySelector('.ptl-drop-zone-overlay')).not.toBeInTheDocument();
+    // Pane should NOT have split-preview class (confirms center zone, not edge zone)
+    expect(paneElement).not.toHaveClass('ptl-pane-split-preview');
+  });
+
   it('reorder tabs within same pane by drag and drop', async () => {
     render(
       <PaneTabsLayout
@@ -1981,6 +2041,526 @@ describe('PaneTabsLayout', () => {
     expect(panesAfter).toBe(panesBefore);
   });
 
+  // ============================================
+  // Tab Pinning
+  // ============================================
+
+  it('renders pinned tabs with pin indicator instead of close button', () => {
+    const pinnedTabs: TabData[] = [
+      {
+        id: 'pinned-tab',
+        title: 'Pinned',
+        content: <div data-testid="pinned-content">Pinned Content</div>,
+        pinned: true,
+      },
+      {
+        id: 'normal-tab',
+        title: 'Normal',
+        content: <div data-testid="normal-content">Normal Content</div>,
+        closable: true,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'pane-pin', tabs: ['pinned-tab', 'normal-tab'], activeTab: 'pinned-tab' },
+      ],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={pinnedTabs} />
+    );
+
+    // Pinned tab should have the pinned class
+    const pinnedEl = screen.getByText('Pinned').closest('.ptl-tab');
+    expect(pinnedEl).toHaveClass('ptl-tab-pinned');
+    expect(pinnedEl).toHaveAttribute('data-pinned', 'true');
+
+    // Pinned tab should have an unpin button, not a close button
+    expect(screen.getByRole('button', { name: /unpin pinned/i })).toBeInTheDocument();
+
+    // Normal tab should have a close button
+    expect(screen.getByRole('button', { name: /close normal/i })).toBeInTheDocument();
+  });
+
+  it('renders pin separator between pinned and unpinned tabs', () => {
+    const mixedTabs: TabData[] = [
+      { id: 'p1', title: 'P1', content: <div>P1</div>, pinned: true },
+      { id: 'u1', title: 'U1', content: <div>U1</div> },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-sep', tabs: ['p1', 'u1'], activeTab: 'p1' }],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={mixedTabs} />
+    );
+
+    expect(container.querySelector('.ptl-pin-separator')).toBeInTheDocument();
+  });
+
+  it('does not render separator when all tabs are pinned', () => {
+    const allPinned: TabData[] = [
+      { id: 'p1', title: 'P1', content: <div>P1</div>, pinned: true },
+      { id: 'p2', title: 'P2', content: <div>P2</div>, pinned: true },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-allpin', tabs: ['p1', 'p2'], activeTab: 'p1' }],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={allPinned} />
+    );
+
+    expect(container.querySelector('.ptl-pin-separator')).not.toBeInTheDocument();
+  });
+
+  it('does not render separator when no tabs are pinned', () => {
+    const noPinned: TabData[] = [
+      { id: 'u1', title: 'U1', content: <div>U1</div> },
+      { id: 'u2', title: 'U2', content: <div>U2</div> },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-nopin', tabs: ['u1', 'u2'], activeTab: 'u1' }],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={noPinned} />
+    );
+
+    expect(container.querySelector('.ptl-pin-separator')).not.toBeInTheDocument();
+  });
+
+  it('pinTab via context pins a tab and moves it to the pinned group', async () => {
+    let pinTabFn: (paneId: string, tabId: string) => void = () => {};
+    let getTabsFn: () => Map<string, TabData> = () => new Map();
+
+    const TestComponent = () => {
+      const { pinTab, tabs: ctxTabs } = useLayout();
+      pinTabFn = pinTab;
+      getTabsFn = () => ctxTabs;
+      return <span data-testid="hook-ready" />;
+    };
+
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'pane-a', tabs: ['tab1', 'tab2', 'tab3'], activeTab: 'tab1' },
+      ],
+    };
+
+    render(
+      <LayoutProvider initialLayout={layout} initialTabs={mockTabs}>
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('hook-ready')).toBeInTheDocument());
+
+    // Pin tab2 (initially at index 1)
+    pinTabFn('pane-a', 'tab2');
+
+    await waitFor(() => {
+      const tab2 = getTabsFn().get('tab2');
+      expect(tab2?.pinned).toBe(true);
+    });
+  });
+
+  it('unpinTab via context unpins a tab', async () => {
+    let unpinTabFn: (paneId: string, tabId: string) => void = () => {};
+    let getTabsFn: () => Map<string, TabData> = () => new Map();
+
+    const pinnedTabs: TabData[] = [
+      { id: 'p1', title: 'P1', content: <div>P1</div>, pinned: true },
+      { id: 'u1', title: 'U1', content: <div>U1</div> },
+    ];
+
+    const TestComponent = () => {
+      const { unpinTab, tabs: ctxTabs } = useLayout();
+      unpinTabFn = unpinTab;
+      getTabsFn = () => ctxTabs;
+      return <span data-testid="hook-ready" />;
+    };
+
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'pane-a', tabs: ['p1', 'u1'], activeTab: 'p1' },
+      ],
+    };
+
+    render(
+      <LayoutProvider initialLayout={layout} initialTabs={pinnedTabs}>
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('hook-ready')).toBeInTheDocument());
+
+    unpinTabFn('pane-a', 'p1');
+
+    await waitFor(() => {
+      const p1 = getTabsFn().get('p1');
+      expect(p1?.pinned).toBe(false);
+    });
+  });
+
+  it('clicking unpin button on a pinned tab unpins it', async () => {
+    const pinnedTabs: TabData[] = [
+      { id: 'pinned1', title: 'Pinned Tab', content: <div>Pinned</div>, pinned: true },
+      { id: 'normal1', title: 'Normal Tab', content: <div>Normal</div> },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'pane-unpin', tabs: ['pinned1', 'normal1'], activeTab: 'pinned1' },
+      ],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={pinnedTabs} />
+    );
+
+    // Pinned tab should have the pin indicator
+    expect(screen.getByRole('button', { name: /unpin pinned tab/i })).toBeInTheDocument();
+    expect(container.querySelector('.ptl-pin-separator')).toBeInTheDocument();
+
+    // Click the unpin button
+    fireEvent.click(screen.getByRole('button', { name: /unpin pinned tab/i }));
+
+    // After unpinning, the tab should no longer be pinned
+    await waitFor(() => {
+      const pinnedEl = screen.getByText('Pinned Tab').closest('.ptl-tab');
+      expect(pinnedEl).not.toHaveClass('ptl-tab-pinned');
+      // Separator should be gone (no more pinned tabs)
+      expect(container.querySelector('.ptl-pin-separator')).not.toBeInTheDocument();
+    });
+  });
+
+  it('unpinned tabs show a pin button with "Pin" label', () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    // Every unpinned tab should have a "Pin {title}" button
+    expect(screen.getByRole('button', { name: /pin tab 1/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pin tab 2/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pin tab 3/i })).toBeInTheDocument();
+  });
+
+  it('unpinned closable tabs have both pin and close buttons', () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    // Tab 1 is closable (default) and unpinned → both buttons
+    expect(screen.getByRole('button', { name: /pin tab 1/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /close tab 1/i })).toBeInTheDocument();
+  });
+
+  it('clicking pin button on an unpinned tab pins it', async () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    const tab1El = screen.getByText('Tab 1').closest('.ptl-tab');
+    expect(tab1El).not.toHaveClass('ptl-tab-pinned');
+
+    // Click the pin button
+    fireEvent.click(screen.getByRole('button', { name: /pin tab 1/i }));
+
+    // Tab 1 should now be pinned
+    await waitFor(() => {
+      const el = screen.getByText('Tab 1').closest('.ptl-tab');
+      expect(el).toHaveClass('ptl-tab-pinned');
+      // Pin button should now show "Unpin" label
+      expect(screen.getByRole('button', { name: /unpin tab 1/i })).toBeInTheDocument();
+      // Close button should be gone (pinned tabs don't show close)
+      expect(screen.queryByRole('button', { name: /close tab 1/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it('pinned tab has no close button, only unpin button', () => {
+    const pinnedTabs: TabData[] = [
+      { id: 'p1', title: 'Alpha', content: <div>A</div>, pinned: true },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-p', tabs: ['p1'], activeTab: 'p1' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={pinnedTabs} />
+    );
+
+    expect(screen.getByRole('button', { name: /unpin alpha/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /close alpha/i })).not.toBeInTheDocument();
+  });
+
+  it('addTab places pinned tabs at end of pinned group', async () => {
+    let addTabFn: (paneId: string, tab: TabData) => void = () => {};
+    let getPanesFn: () => Map<string, any> = () => new Map();
+
+    const initialPinnedTabs: TabData[] = [
+      { id: 'p1', title: 'P1', content: <div>P1</div>, pinned: true },
+      { id: 'u1', title: 'U1', content: <div>U1</div> },
+    ];
+
+    const TestComponent = () => {
+      const { addTab, panes: ctxPanes } = useLayout();
+      addTabFn = addTab;
+      getPanesFn = () => ctxPanes;
+      return <span data-testid="hook-ready" />;
+    };
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-add', tabs: ['p1', 'u1'], activeTab: 'p1' }],
+    };
+
+    render(
+      <LayoutProvider initialLayout={layout} initialTabs={initialPinnedTabs}>
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('hook-ready')).toBeInTheDocument());
+
+    // Add a new pinned tab
+    addTabFn('pane-add', {
+      id: 'p2',
+      title: 'P2',
+      content: <div>P2</div>,
+      pinned: true,
+    });
+
+    await waitFor(() => {
+      const pane = getPanesFn().get('pane-add');
+      // p2 should be inserted after p1 (end of pinned group) but before u1
+      expect(pane.tabs).toEqual(['p1', 'p2', 'u1']);
+    });
+  });
+
+  it('addTab places unpinned tabs at the end', async () => {
+    let addTabFn: (paneId: string, tab: TabData) => void = () => {};
+    let getPanesFn: () => Map<string, any> = () => new Map();
+
+    const initialPinnedTabs: TabData[] = [
+      { id: 'p1', title: 'P1', content: <div>P1</div>, pinned: true },
+      { id: 'u1', title: 'U1', content: <div>U1</div> },
+    ];
+
+    const TestComponent = () => {
+      const { addTab, panes: ctxPanes } = useLayout();
+      addTabFn = addTab;
+      getPanesFn = () => ctxPanes;
+      return <span data-testid="hook-ready" />;
+    };
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-add2', tabs: ['p1', 'u1'], activeTab: 'p1' }],
+    };
+
+    render(
+      <LayoutProvider initialLayout={layout} initialTabs={initialPinnedTabs}>
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('hook-ready')).toBeInTheDocument());
+
+    addTabFn('pane-add2', {
+      id: 'u2',
+      title: 'U2',
+      content: <div>U2</div>,
+    });
+
+    await waitFor(() => {
+      const pane = getPanesFn().get('pane-add2');
+      expect(pane.tabs).toEqual(['p1', 'u1', 'u2']);
+    });
+  });
+
+  it('right-click on a tab shows context menu with Pin Tab option', async () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    const tab1 = screen.getByText('Tab 1');
+    fireEvent.contextMenu(tab1);
+
+    await waitFor(() => {
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      expect(screen.getByText('Pin Tab')).toBeInTheDocument();
+    });
+  });
+
+  it('right-click on a pinned tab shows Unpin Tab option', async () => {
+    const pinnedTabs: TabData[] = [
+      { id: 'p1', title: 'Pinned', content: <div>Pinned</div>, pinned: true },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-ctx', tabs: ['p1'], activeTab: 'p1' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={pinnedTabs} />
+    );
+
+    fireEvent.contextMenu(screen.getByRole('tab', { name: /Pinned/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      expect(screen.getByText('Unpin Tab')).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Pin Tab in context menu pins the tab', async () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    // Right-click Tab 1
+    fireEvent.contextMenu(screen.getByText('Tab 1'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Pin Tab')).toBeInTheDocument();
+    });
+
+    // Click "Pin Tab"
+    fireEvent.click(screen.getByText('Pin Tab'));
+
+    // Tab 1 should now be pinned
+    await waitFor(() => {
+      const tab1El = screen.getByText('Tab 1').closest('.ptl-tab');
+      expect(tab1El).toHaveClass('ptl-tab-pinned');
+    });
+
+    // Context menu should be closed
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('clicking Unpin Tab in context menu unpins the tab', async () => {
+    const pinnedTabs: TabData[] = [
+      { id: 'p1', title: 'Pinned', content: <div>Pinned</div>, pinned: true },
+      { id: 'u1', title: 'Unpinned', content: <div>Unpinned</div> },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-ctx2', tabs: ['p1', 'u1'], activeTab: 'p1' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={pinnedTabs} />
+    );
+
+    // Right-click the pinned tab
+    fireEvent.contextMenu(screen.getByRole('tab', { name: /Pinned/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Unpin Tab')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Unpin Tab'));
+
+    // Tab should be unpinned
+    await waitFor(() => {
+      const tabEl = screen.getByRole('tab', { name: /Pinned/ });
+      expect(tabEl).not.toHaveClass('ptl-tab-pinned');
+    });
+  });
+
+  it('context menu shows Close Tab for closable tabs', async () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    // Tab 1 is closable by default (closable not set = true)
+    fireEvent.contextMenu(screen.getByText('Tab 1'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Close Tab')).toBeInTheDocument();
+    });
+  });
+
+  it('context menu hides Close Tab for non-closable tabs', async () => {
+    const nonClosableTabs: TabData[] = [
+      { id: 'nc1', title: 'No Close', content: <div>NC</div>, closable: false },
+    ];
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-nc', tabs: ['nc1'], activeTab: 'nc1' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={nonClosableTabs} />
+    );
+
+    fireEvent.contextMenu(screen.getByText('No Close'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Pin Tab')).toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+  });
+
+  it('clicking Close Tab in context menu closes the tab', async () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    expect(screen.getByText('Tab 1')).toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getByText('Tab 1'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Close Tab')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Close Tab'));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Tab 1')).not.toBeInTheDocument();
+    });
+  });
+
+  it('context menu closes on Escape key', async () => {
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    fireEvent.contextMenu(screen.getByText('Tab 1'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+  });
+
+  it('pinTab and unpinTab are accessible via useLayout hook', async () => {
+    let pinFn: (paneId: string, tabId: string) => void = () => {};
+    let unpinFn: (paneId: string, tabId: string) => void = () => {};
+
+    const TestComponent = () => {
+      const { pinTab, unpinTab } = useLayout();
+      pinFn = pinTab;
+      unpinFn = unpinTab;
+      return <span data-testid="hook-ready" />;
+    };
+
+    render(
+      <LayoutProvider initialLayout={mockLayout} initialTabs={mockTabs}>
+        <TestComponent />
+      </LayoutProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('hook-ready')).toBeInTheDocument());
+
+    expect(typeof pinFn).toBe('function');
+    expect(typeof unpinFn).toBe('function');
+  });
 });
 
 // ============================================

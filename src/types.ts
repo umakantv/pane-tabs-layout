@@ -26,6 +26,8 @@ export interface TabData {
   closable?: boolean;
   /** Whether the tab can be dragged to other panes */
   draggable?: boolean;
+  /** Whether the tab is pinned (pinned tabs are grouped at the start of the tab bar and cannot be closed via UI) */
+  pinned?: boolean;
   /** Additional data associated with the tab */
   data?: Record<string, unknown>;
 }
@@ -180,6 +182,10 @@ export interface LayoutContextValue {
   maximizePane: (paneId: Id) => void;
   /** Restore the layout from maximized state */
   restorePane: () => void;
+  /** Pin a tab (moves it to the end of the pinned group in the pane) */
+  pinTab: (paneId: Id, tabId: Id) => void;
+  /** Unpin a tab (moves it to the start of the unpinned group in the pane) */
+  unpinTab: (paneId: Id, tabId: Id) => void;
 }
 
 /**
@@ -241,10 +247,16 @@ export interface TabProps {
   isActive: boolean;
   /** Whether the tab is being dragged */
   isDragging?: boolean;
+  /** Whether the tab is pinned */
+  isPinned?: boolean;
   /** Click handler */
   onClick?: () => void;
   /** Close handler */
   onClose?: () => void;
+  /** Pin handler (called when pin button is clicked on an unpinned tab) */
+  onPin?: () => void;
+  /** Unpin handler (called when pin button is clicked on a pinned tab) */
+  onUnpin?: () => void;
   /** Drag start handler */
   onDragStart?: () => void;
   /** Drag end handler */

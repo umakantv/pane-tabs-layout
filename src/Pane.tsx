@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Allotment } from "allotment";
 import { Tab } from "./Tab";
 import { useLayout } from "./LayoutContext";
@@ -23,6 +24,8 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
     maximizedPaneId,
     maximizePane,
     restorePane,
+    pinTab,
+    unpinTab,
   } = useLayout();
   const isMaximized = maximizedPaneId === paneId;
   const [isDragOver, setIsDragOver] = useState(false);
@@ -31,6 +34,7 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
     SplitDirection | "center" | null
   >(null);
   const paneRef = useRef<HTMLDivElement>(null);
+  const tabBarRef = useRef<HTMLDivElement>(null);
 
   // Look up pane data from context to always have fresh data
   const pane = useMemo(() => panes.get(paneId), [panes, paneId]);
@@ -87,7 +91,18 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
       e.dataTransfer.dropEffect = "move";
       setIsDragOver(true);
 
-      const dropZone = calculateDropZone(e);
+      // When dragging over the tab bar header, only allow tab reordering
+      // (center zone) — don't trigger split-pane drop zones there.
+      // This ensures users can reorder tabs to the first/last position
+      // without accidentally activating the left/right split zones.
+      let dropZone: SplitDirection | "center";
+      const tabBarEl = tabBarRef.current;
+      if (tabBarEl && e.clientY <= tabBarEl.getBoundingClientRect().bottom) {
+        dropZone = "center";
+      } else {
+        dropZone = calculateDropZone(e);
+      }
+
       setActiveDropZone(dropZone);
       setDropZone({ paneId, direction: dropZone });
 
@@ -104,6 +119,15 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
             targetIndex = i;
             break;
           }
+        }
+
+        // Clamp target index based on whether the dragged tab is pinned
+        const draggedTab = dragData ? tabs.get(dragData.tabId) : null;
+        const pinnedCount = paneTabs.filter((t) => t.pinned).length;
+        if (draggedTab?.pinned) {
+          targetIndex = Math.min(targetIndex, pinnedCount);
+        } else {
+          targetIndex = Math.max(targetIndex, pinnedCount);
         }
 
         setDragOverIndex(targetIndex);
@@ -266,6 +290,77 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
     }
   }, [isMaximized, maximizePane, restorePane, paneId]);
 
+  // ---- Context menu (right-click on tabs) ----
+  const [contextMenu, setContextMenu] = useState<{
+    tabId: Id;
+    x: number;
+    y: number;
+  } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Right-click on a tab opens a context menu with Pin / Unpin and Close.
+   * Uses event delegation on the tab bar — walks up to find .ptl-tab.
+   */
+  const handleTabBarContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      let target = e.target as HTMLElement;
+      while (target && target !== e.currentTarget) {
+        if (target.classList.contains("ptl-tab")) {
+          const tabId = target.getAttribute("data-tab-id");
+          if (tabId) {
+            e.preventDefault();
+            setContextMenu({ tabId, x: e.clientX, y: e.clientY });
+          }
+          return;
+        }
+        target = target.parentElement!;
+      }
+    },
+    []
+  );
+
+  // Close context menu on outside click, Escape, scroll, resize, or blur
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (
+        contextMenuRef.current &&
+        !contextMenuRef.current.contains(e.target as Node)
+      ) {
+        setContextMenu(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+
+    const handleDismiss = () => setContextMenu(null);
+
+    // Delay mousedown listener so the opening right-click doesn't immediately close the menu
+    const rafId = requestAnimationFrame(() => {
+      document.addEventListener("mousedown", handleMouseDown);
+    });
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleDismiss, true);
+    window.addEventListener("resize", handleDismiss);
+    window.addEventListener("blur", handleDismiss);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleDismiss, true);
+      window.removeEventListener("resize", handleDismiss);
+      window.removeEventListener("blur", handleDismiss);
+    };
+  }, [contextMenu]);
+
+  // Look up the tab for the open context menu (null-safe if tab was removed)
+  const contextMenuTab = contextMenu ? tabs.get(contextMenu.tabId) : null;
+
   /**
    * Get drop zone overlay styles based on active drop zone
    */
@@ -337,27 +432,40 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
         ) : (
           <>
             <div
+              ref={tabBarRef}
               className="ptl-tab-bar"
               onDoubleClick={handleTabBarDoubleClick}
+              onContextMenu={handleTabBarContextMenu}
             >
-              {paneTabs.map((tab, index) => (
-                <React.Fragment key={tab.id}>
-                  {isDragOver &&
-                    activeDropZone === "center" &&
-                    dragOverIndex === index && (
-                      <div className="ptl-drop-indicator" />
+              {paneTabs.map((tab, index) => {
+                const isPinned = !!tab.pinned;
+                const pinnedCount = paneTabs.filter((t) => t.pinned).length;
+                const isLastPinned = isPinned && index === pinnedCount - 1 && pinnedCount < paneTabs.length;
+                return (
+                  <React.Fragment key={tab.id}>
+                    {isDragOver &&
+                      activeDropZone === "center" &&
+                      dragOverIndex === index && (
+                        <div className="ptl-drop-indicator" />
+                      )}
+                    <Tab
+                      tab={tab}
+                      isActive={pane.activeTab === tab.id}
+                      isDragging={dragData?.tabId === tab.id}
+                      isPinned={isPinned}
+                      onClick={() => activateTab(pane.id, tab.id)}
+                      onClose={() => closeTab(pane.id, tab.id)}
+                      onPin={() => pinTab(pane.id, tab.id)}
+                      onUnpin={() => unpinTab(pane.id, tab.id)}
+                      onDragStart={() => handleTabDragStart(tab.id)}
+                      onDragEnd={handleTabDragEnd}
+                    />
+                    {isLastPinned && (
+                      <div className="ptl-pin-separator" />
                     )}
-                  <Tab
-                    tab={tab}
-                    isActive={pane.activeTab === tab.id}
-                    isDragging={dragData?.tabId === tab.id}
-                    onClick={() => activateTab(pane.id, tab.id)}
-                    onClose={() => closeTab(pane.id, tab.id)}
-                    onDragStart={() => handleTabDragStart(tab.id)}
-                    onDragEnd={handleTabDragEnd}
-                  />
-                </React.Fragment>
-              ))}
+                  </React.Fragment>
+                );
+              })}
               {isDragOver &&
                 activeDropZone === "center" &&
                 dragOverIndex === paneTabs.length && (
@@ -407,6 +515,53 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                 <div className="ptl-empty-state">No tab selected</div>
               )}
             </div>
+            {/* Tab context menu (rendered via portal to avoid overflow clipping) */}
+            {contextMenu &&
+              contextMenuTab &&
+              typeof document !== "undefined" &&
+              createPortal(
+                <div
+                  ref={contextMenuRef}
+                  className="ptl-context-menu"
+                  style={{ top: contextMenu.y, left: contextMenu.x }}
+                  onContextMenu={(e) => e.preventDefault()}
+                  role="menu"
+                >
+                  <div
+                    className="ptl-context-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      if (contextMenuTab.pinned) {
+                        unpinTab(pane.id, contextMenu.tabId);
+                      } else {
+                        pinTab(pane.id, contextMenu.tabId);
+                      }
+                      setContextMenu(null);
+                    }}
+                  >
+                    {contextMenuTab.pinned ? "Unpin Tab" : "Pin Tab"}
+                  </div>
+                  {contextMenuTab.closable !== false && (
+                    <>
+                      <div
+                        className="ptl-context-menu-separator"
+                        role="separator"
+                      />
+                      <div
+                        className="ptl-context-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          closeTab(pane.id, contextMenu.tabId);
+                          setContextMenu(null);
+                        }}
+                      >
+                        Close Tab
+                      </div>
+                    </>
+                  )}
+                </div>,
+                document.body
+              )}
           </>
         )}
       </div>

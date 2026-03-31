@@ -5,8 +5,11 @@ export const Tab: React.FC<TabProps> = ({
   tab,
   isActive,
   isDragging = false,
+  isPinned = false,
   onClick,
   onClose,
+  onPin,
+  onUnpin,
   onDragStart,
   onDragEnd,
 }) => {
@@ -16,6 +19,18 @@ export const Tab: React.FC<TabProps> = ({
       onClose?.();
     },
     [onClose]
+  );
+
+  const handlePinToggle = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (isPinned) {
+        onUnpin?.();
+      } else {
+        onPin?.();
+      }
+    },
+    [isPinned, onPin, onUnpin]
   );
 
   const handleDragStart = useCallback(
@@ -40,7 +55,7 @@ export const Tab: React.FC<TabProps> = ({
 
   return (
     <div
-      className={`ptl-tab ${isActive ? 'ptl-tab-active' : ''} ${isDragging ? 'ptl-tab-dragging' : ''}`}
+      className={`ptl-tab ${isActive ? 'ptl-tab-active' : ''} ${isDragging ? 'ptl-tab-dragging' : ''} ${isPinned ? 'ptl-tab-pinned' : ''}`}
       onClick={onClick}
       draggable={draggable}
       onDragStart={handleDragStart}
@@ -48,10 +63,30 @@ export const Tab: React.FC<TabProps> = ({
       role="tab"
       aria-selected={isActive}
       data-tab-id={tab.id}
+      data-pinned={isPinned || undefined}
     >
       {tab.icon && <span className="ptl-tab-icon">{tab.icon}</span>}
       <span className="ptl-tab-title">{tab.title}</span>
-      {tab.closable !== false && onClose && (
+      {/* Pin toggle — visible on hover for every tab */}
+      <button
+        className="ptl-tab-pin"
+        onClick={handlePinToggle}
+        aria-label={isPinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
+        title={isPinned ? 'Unpin tab' : 'Pin tab'}
+        type="button"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M4.456.734a1.75 1.75 0 0 1 2.826.504l.613 1.327a3.081 3.081 0 0 0 2.084 1.707l2.454.584c1.332.317 1.8 1.972.832 2.94L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-2.204 2.205c-.968.968-2.623.5-2.94-.832l-.584-2.454a3.081 3.081 0 0 0-1.707-2.084l-1.327-.613a1.75 1.75 0 0 1-.504-2.826z" />
+        </svg>
+      </button>
+      {/* Close button — only on unpinned closable tabs */}
+      {!isPinned && tab.closable !== false && onClose && (
         <button
           className="ptl-tab-close"
           onClick={handleClose}
