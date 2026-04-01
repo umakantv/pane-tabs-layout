@@ -3,7 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PaneTabsLayout } from './PaneTabsLayout';
 import { PaneLink } from './PaneLink';
 import { LayoutProvider, useLayout } from './LayoutContext';
-import type { TabData, LayoutConfig } from './types';
+import React from 'react';
+import type { TabData, LayoutConfig, RenderTabProps } from './types';
 
 const mockTabs: TabData[] = [
   {
@@ -2560,6 +2561,421 @@ describe('PaneTabsLayout', () => {
 
     expect(typeof pinFn).toBe('function');
     expect(typeof unpinFn).toBe('function');
+  });
+
+  // ============================================
+  // Custom Tab Headers / Toolbars
+  // ============================================
+
+  // ---- Level 1: tabExtra ----
+
+  it('renders tabExtra content inside the tab header', () => {
+    const tabsWithExtra: TabData[] = [
+      {
+        id: 'tab-extra',
+        title: 'Notifications',
+        content: <div data-testid="extra-content">Content</div>,
+        tabExtra: <span data-testid="badge" className="badge">3</span>,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-extra', tabs: ['tab-extra'], activeTab: 'tab-extra' }],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithExtra} />
+    );
+
+    // Badge should be rendered inside the tab
+    expect(screen.getByTestId('badge')).toBeInTheDocument();
+    expect(screen.getByTestId('badge').textContent).toBe('3');
+
+    // It should be inside a .ptl-tab-extra wrapper
+    expect(container.querySelector('.ptl-tab-extra')).toBeInTheDocument();
+    expect(container.querySelector('.ptl-tab-extra')?.querySelector('[data-testid="badge"]')).toBeInTheDocument();
+
+    // Tab title should still be there
+    expect(screen.getByText('Notifications')).toBeInTheDocument();
+  });
+
+  it('does not render .ptl-tab-extra wrapper when tabExtra is not set', () => {
+    const { container } = render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    expect(container.querySelector('.ptl-tab-extra')).not.toBeInTheDocument();
+  });
+
+  it('tabExtra does not interfere with close button', () => {
+    const tabsWithExtra: TabData[] = [
+      {
+        id: 'tab-extra-close',
+        title: 'Closable Extra',
+        content: <div>Content</div>,
+        closable: true,
+        tabExtra: <span data-testid="dot" />,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-ec', tabs: ['tab-extra-close'], activeTab: 'tab-extra-close' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithExtra} />
+    );
+
+    // Both extra content and close button should be present
+    expect(screen.getByTestId('dot')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /close closable extra/i })).toBeInTheDocument();
+  });
+
+  it('tabExtra does not interfere with pin button', () => {
+    const tabsWithExtra: TabData[] = [
+      {
+        id: 'tab-extra-pin',
+        title: 'Pinnable Extra',
+        content: <div>Content</div>,
+        pinned: true,
+        tabExtra: <span data-testid="status">OK</span>,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-ep', tabs: ['tab-extra-pin'], activeTab: 'tab-extra-pin' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithExtra} />
+    );
+
+    expect(screen.getByTestId('status')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /unpin pinnable extra/i })).toBeInTheDocument();
+  });
+
+  it('tabExtra does not interfere with drag and drop', () => {
+    const tabsWithExtra: TabData[] = [
+      {
+        id: 'tab-drag-extra',
+        title: 'Draggable Extra',
+        content: <div>Content</div>,
+        tabExtra: <span data-testid="drag-badge">!</span>,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-de', tabs: ['tab-drag-extra'], activeTab: 'tab-drag-extra' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithExtra} />
+    );
+
+    const tabEl = screen.getByText('Draggable Extra').closest('.ptl-tab');
+    expect(tabEl).toHaveAttribute('draggable', 'true');
+    expect(screen.getByTestId('drag-badge')).toBeInTheDocument();
+  });
+
+  // ---- Level 2: tabBarActions ----
+
+  it('renders tabBarActions content in the tab bar right area', () => {
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-actions', tabs: ['tab1'], activeTab: 'tab1' }],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={mockTabs}
+        tabBarActions={(paneId) => (
+          <button data-testid={`run-btn-${paneId}`}>Run</button>
+        )}
+      />
+    );
+
+    expect(screen.getByTestId('run-btn-pane-actions')).toBeInTheDocument();
+    expect(screen.getByTestId('run-btn-pane-actions').textContent).toBe('Run');
+
+    // Should be inside the tab-bar-right wrapper
+    const rightSection = container.querySelector('.ptl-tab-bar-right');
+    expect(rightSection).toBeInTheDocument();
+    expect(rightSection?.querySelector('[data-testid="run-btn-pane-actions"]')).toBeInTheDocument();
+  });
+
+  it('tabBarActions is called for each visible pane', () => {
+    const tabBarActionsFn = vi.fn(() => null);
+
+    render(
+      <PaneTabsLayout
+        initialLayout={mockLayout}
+        initialTabs={mockTabs}
+        tabBarActions={tabBarActionsFn}
+      />
+    );
+
+    // Two panes in mockLayout -> should be called twice
+    expect(tabBarActionsFn).toHaveBeenCalledTimes(2);
+    expect(tabBarActionsFn).toHaveBeenCalledWith('pane1', expect.objectContaining({ id: 'pane1' }));
+    expect(tabBarActionsFn).toHaveBeenCalledWith('pane2', expect.objectContaining({ id: 'pane2' }));
+  });
+
+  it('tabBarActions can render different content per pane', () => {
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'editor', tabs: ['tab1'], activeTab: 'tab1' },
+        { id: 'console', tabs: ['tab2'], activeTab: 'tab2' },
+      ],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={mockTabs}
+        tabBarActions={(paneId) =>
+          paneId === 'editor'
+            ? <button data-testid="save-btn">Save</button>
+            : <button data-testid="clear-btn">Clear</button>
+        }
+      />
+    );
+
+    expect(screen.getByTestId('save-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('clear-btn')).toBeInTheDocument();
+  });
+
+  it('tabBarActions does not interfere with maximize button', () => {
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-a', tabs: ['tab1'], activeTab: 'tab1' }],
+    };
+
+    render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={mockTabs}
+        tabBarActions={() => <button data-testid="action">Action</button>}
+      />
+    );
+
+    // Both the custom action and the maximize button should exist
+    expect(screen.getByTestId('action')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /maximize pane/i })).toBeInTheDocument();
+  });
+
+  it('tab bar right area always renders even without tabBarActions', () => {
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-no-actions', tabs: ['tab1'], activeTab: 'tab1' }],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={mockTabs} />
+    );
+
+    // The ptl-tab-bar-right wrapper should exist (it always wraps the maximize button)
+    expect(container.querySelector('.ptl-tab-bar-right')).toBeInTheDocument();
+    // Maximize button should still be there
+    expect(screen.getByRole('button', { name: /maximize pane/i })).toBeInTheDocument();
+  });
+
+  // ---- Level 3: renderTab ----
+
+  it('renderTab receives correct props and renders custom content', () => {
+    const renderTabFn = vi.fn(({ isActive, defaultTab }: RenderTabProps) => (
+      <div data-testid="custom-tab">
+        {defaultTab}
+        {isActive && <span data-testid="active-indicator">*</span>}
+      </div>
+    ));
+
+    const tabsWithRender: TabData[] = [
+      {
+        id: 'tab-render',
+        title: 'Custom Render',
+        content: <div>Content</div>,
+        renderTab: renderTabFn,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-render', tabs: ['tab-render'], activeTab: 'tab-render' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithRender} />
+    );
+
+    // renderTab should have been called
+    expect(renderTabFn).toHaveBeenCalled();
+    const callArgs = renderTabFn.mock.calls[0][0];
+    expect(callArgs.tab.id).toBe('tab-render');
+    expect(callArgs.isActive).toBe(true);
+    expect(callArgs.isPinned).toBe(false);
+    expect(callArgs.isDragging).toBe(false);
+    expect(callArgs.defaultTab).toBeDefined();
+
+    // Custom content should be rendered
+    expect(screen.getByTestId('custom-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('active-indicator')).toBeInTheDocument();
+
+    // The default content should also be present (composing)
+    expect(screen.getByText('Custom Render')).toBeInTheDocument();
+  });
+
+  it('renderTab preserves the outer tab wrapper (drag, ARIA, click)', () => {
+    const tabsWithRender: TabData[] = [
+      {
+        id: 'tab-outer',
+        title: 'Outer Test',
+        content: <div>Content</div>,
+        renderTab: ({ defaultTab }) => <div data-testid="inner">{defaultTab}</div>,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-outer', tabs: ['tab-outer'], activeTab: 'tab-outer' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithRender} />
+    );
+
+    // The outer .ptl-tab div should still have all standard attributes
+    const tabEl = screen.getByRole('tab');
+    expect(tabEl).toHaveAttribute('data-tab-id', 'tab-outer');
+    expect(tabEl).toHaveAttribute('draggable', 'true');
+    expect(tabEl).toHaveAttribute('aria-selected', 'true');
+
+    // The custom inner content should be inside it
+    expect(screen.getByTestId('inner')).toBeInTheDocument();
+  });
+
+  it('renderTab can fully replace the inner content', () => {
+    const tabsWithRender: TabData[] = [
+      {
+        id: 'tab-replace',
+        title: 'Original Title',
+        content: <div>Content</div>,
+        renderTab: () => <span data-testid="replaced">Completely Custom</span>,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-replace', tabs: ['tab-replace'], activeTab: 'tab-replace' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithRender} />
+    );
+
+    // Custom content should be rendered
+    expect(screen.getByTestId('replaced')).toBeInTheDocument();
+    expect(screen.getByText('Completely Custom')).toBeInTheDocument();
+
+    // Original default title and buttons should NOT be present
+    // (they were replaced, not composed)
+    expect(screen.queryByText('Original Title')).not.toBeInTheDocument();
+  });
+
+  it('renderTab works alongside tabExtra (tabExtra is in defaultTab)', () => {
+    const tabsWithBoth: TabData[] = [
+      {
+        id: 'tab-both',
+        title: 'Both Features',
+        content: <div>Content</div>,
+        tabExtra: <span data-testid="extra-badge">5</span>,
+        renderTab: ({ defaultTab }) => (
+          <div data-testid="custom-wrapper">{defaultTab}</div>
+        ),
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [{ id: 'pane-both', tabs: ['tab-both'], activeTab: 'tab-both' }],
+    };
+
+    render(
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabsWithBoth} />
+    );
+
+    // Both features should be visible
+    expect(screen.getByTestId('custom-wrapper')).toBeInTheDocument();
+    expect(screen.getByTestId('extra-badge')).toBeInTheDocument();
+    expect(screen.getByText('Both Features')).toBeInTheDocument();
+  });
+
+  it('tabs without renderTab still render normally', () => {
+    // Ensure the default path is unaffected
+    render(
+      <PaneTabsLayout initialLayout={mockLayout} initialTabs={mockTabs} />
+    );
+
+    expect(screen.getByText('Tab 1')).toBeInTheDocument();
+    expect(screen.getByText('Tab 2')).toBeInTheDocument();
+    expect(screen.getByText('Tab 3')).toBeInTheDocument();
+
+    // Close buttons should work normally
+    expect(screen.getAllByRole('button', { name: /close/i }).length).toBeGreaterThan(0);
+  });
+
+  // ---- Combined: all three levels together ----
+
+  it('all three customization levels work together without conflict', () => {
+    const tabsAll: TabData[] = [
+      {
+        id: 'tab-all',
+        title: 'Full Custom',
+        content: <div data-testid="full-content">Content</div>,
+        tabExtra: <span data-testid="all-badge">NEW</span>,
+        renderTab: ({ defaultTab, isActive }) => (
+          <div data-testid="all-wrapper">
+            {defaultTab}
+            {isActive && <span data-testid="all-active">active</span>}
+          </div>
+        ),
+      },
+      {
+        id: 'tab-normal',
+        title: 'Normal Tab',
+        content: <div>Normal</div>,
+      },
+    ];
+
+    const layout: LayoutConfig = {
+      panes: [
+        { id: 'pane-all', tabs: ['tab-all', 'tab-normal'], activeTab: 'tab-all' },
+      ],
+    };
+
+    const { container } = render(
+      <PaneTabsLayout
+        initialLayout={layout}
+        initialTabs={tabsAll}
+        tabBarActions={(paneId) => (
+          <button data-testid={`toolbar-${paneId}`}>Toolbar</button>
+        )}
+      />
+    );
+
+    // Level 1: tabExtra
+    expect(screen.getByTestId('all-badge')).toBeInTheDocument();
+
+    // Level 2: tabBarActions
+    expect(screen.getByTestId('toolbar-pane-all')).toBeInTheDocument();
+
+    // Level 3: renderTab
+    expect(screen.getByTestId('all-wrapper')).toBeInTheDocument();
+    expect(screen.getByTestId('all-active')).toBeInTheDocument();
+
+    // Normal tab still renders normally
+    expect(screen.getByText('Normal Tab')).toBeInTheDocument();
+
+    // Maximize button still present
+    expect(screen.getByRole('button', { name: /maximize pane/i })).toBeInTheDocument();
+
+    // The tab-bar-right wrapper contains both toolbar action and maximize
+    const rightSection = container.querySelector('.ptl-tab-bar-right');
+    expect(rightSection).toBeInTheDocument();
+    expect(rightSection?.querySelector('[data-testid="toolbar-pane-all"]')).toBeInTheDocument();
   });
 });
 

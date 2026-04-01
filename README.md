@@ -14,13 +14,16 @@ A production-ready React component library for creating sophisticated split-pane
 - 🧹 **Auto-Cleanup** - Empty panes automatically collapse and remove themselves
 - 📱 **Fully Responsive** - Panes intelligently adjust to container size changes
 - 💾 **Persistent State** - Serialize and restore complete layout configurations
-- 🎨 **Deeply Customizable** - Extensive CSS variables for complete theming control
+- 🎨 **Deeply Customizable** - Built-in dark & light themes with extensive CSS variables for complete theming control
 - ♿ **Accessible** - Full ARIA support with keyboard navigation
 - 🔗 **Link Interception** - Automatically open matching links as tabs with custom resolver
 - 📝 **TypeScript First** - 100% TypeScript with comprehensive type definitions
 - 🚀 **Production Ready** - Battle-tested with automated testing and strict type checking
 - 📌 **Tab Pinning** - Pin important tabs to the start of the tab bar with visual separation, drag boundaries, and programmatic pin/unpin control — just like VS Code.
-- 🔲 **Maximize / Restore Panes** - Double-click the empty tab bar area or click the maximize/restore button (top-right of tab bar) to toggle a pane between normal and maximized (full viewport) states.## 📦 Installation
+- 🔲 **Maximize / Restore Panes** - Double-click the empty tab bar area or click the maximize/restore button (top-right of tab bar) to toggle a pane between normal and maximized (full viewport) states.
+- 🧩 **Custom Tab Headers / Toolbars** - Three levels of tab header customization: simple `tabExtra` badges, per-pane `tabBarActions` toolbars, and full `renderTab` control — all without breaking drag-and-drop or pinning.
+
+## 📦 Installation
 
 ```sh
 npm install pane-tabs-layout
@@ -142,6 +145,77 @@ function MyComponent() {
 - **Drag boundaries** are enforced: pinned tabs stay in the pinned zone, unpinned tabs stay in the unpinned zone
 - Pin state is **persisted** via `onTabsChange` (the `pinned` field is included in `TabData`)
 
+### Custom Tab Headers / Toolbars
+
+Three levels of tab header customization, from simple to full control. All levels are safe with drag-and-drop, pinning, and maximize — the library always controls the outer interactive wrapper.
+
+#### Level 1: `tabExtra` (per-tab badges & indicators)
+
+Add small decorations (badges, status dots, action buttons) after the tab title:
+
+```tsx
+const tabs: TabData[] = [
+  {
+    id: 'notifications',
+    title: 'Notifications',
+    content: <NotificationList />,
+    tabExtra: <span className="badge">3</span>,
+  },
+  {
+    id: 'editor',
+    title: 'main.ts',
+    content: <CodeEditor />,
+    tabExtra: <span className="modified-dot" />,
+  },
+];
+```
+
+#### Level 2: `tabBarActions` (per-pane toolbar area)
+
+Inject toolbar widgets into the right side of any pane's tab bar, next to the maximize button:
+
+```tsx
+<PaneTabsLayout
+  initialLayout={layout}
+  initialTabs={tabs}
+  tabBarActions={(paneId, pane) => {
+    if (paneId === 'editor-pane') {
+      return (
+        <>
+          <button onClick={runCode}>▶ Run</button>
+          <button onClick={formatCode}>Format</button>
+        </>
+      );
+    }
+    return null; // No extra actions for other panes
+  }}
+/>
+```
+
+#### Level 3: `renderTab` (full per-tab control)
+
+Fully customize a tab header's inner content. Receives the current state and the default rendering (`defaultTab`) for easy composition:
+
+```tsx
+const tabs: TabData[] = [
+  {
+    id: 'editor',
+    title: 'main.ts',
+    content: <CodeEditor />,
+    renderTab: ({ defaultTab, isActive }) => (
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {defaultTab}
+        {isActive && <span className="tab-subtitle">editing</span>}
+      </div>
+    ),
+  },
+];
+```
+
+The outer tab wrapper (drag handlers, click, ARIA attributes, CSS classes) is always managed by the library. `renderTab` only replaces the inner content, so all interactions remain intact.
+
+**Composition with `defaultTab`:** Wrap `defaultTab` to add decorations while keeping the built-in icon, title, `tabExtra`, pin/close buttons. Or ignore `defaultTab` entirely for a fully custom tab header.
+
 ### Tab Data & Metadata
 
 Attach any serializable data to tabs for dynamic content rendering:
@@ -193,6 +267,7 @@ The root component that manages the entire layout system.
 | `onTabsChange` | `(tabs: TabData[]) => void` | ❌ | Called when tabs are added, removed, or reordered |
 | `onOpenLink` | `(url: string) => TabData \| null` | ❌ | Link resolver — return a `TabData` to open the URL as a tab, or `null` for default browser behavior |
 | `linkInterception` | `'auto' \| 'manual' \| 'none'` | ❌ | Controls how `<a>` clicks inside content are intercepted (default: `'auto'`) |
+| `tabBarActions` | `(paneId: string, pane: PaneConfig) => ReactNode` | ❌ | Render extra toolbar actions in each pane's tab bar (right side, before maximize button) |
 | `className` | `string` | ❌ | Additional CSS class for the container |
 | `style` | `React.CSSProperties` | ❌ | Inline styles for the container |
 
@@ -218,6 +293,10 @@ interface TabData {
   pinned?: boolean;
   /** Custom data attached to the tab */
   data?: Record<string, unknown>;
+  /** Extra content after the title (badges, status dots, etc.) */
+  tabExtra?: ReactNode;
+  /** Custom render function for the tab header inner content */
+  renderTab?: (props: RenderTabProps) => ReactNode;
 }
 ```
 
@@ -265,9 +344,37 @@ interface LayoutNode {
 
 ## 🎨 Theming
 
-Pane Tabs Layout uses CSS custom properties for complete visual customization:
+Pane Tabs Layout ships with **dark** (default) and **light** built-in themes and uses CSS custom properties for complete visual customization.
 
-### Complete CSS Variable Reference
+### Switching Themes
+
+Activate the light theme by setting `data-theme="light"` on any ancestor element:
+
+```tsx
+// Light theme
+<div data-theme="light">
+  <PaneTabsLayout initialLayout={layout} initialTabs={tabs} />
+</div>
+
+// Dark theme (default — no attribute needed)
+<PaneTabsLayout initialLayout={layout} initialTabs={tabs} />
+```
+
+To follow the user's OS preference automatically:
+
+```tsx
+function App() {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  return (
+    <div data-theme={prefersDark ? 'dark' : 'light'}>
+      <PaneTabsLayout initialLayout={layout} initialTabs={tabs} />
+    </div>
+  );
+}
+```
+
+### CSS Variable Reference
 
 ```css
 :root {
@@ -309,24 +416,23 @@ Pane Tabs Layout uses CSS custom properties for complete visual customization:
   /* Pinned Tabs */
   --ptl-tab-pinned-indicator: #007acc;
   --ptl-pin-separator-color: #3c3c3c;
+
+  /* Tab Bar Actions */
+  --ptl-tab-bar-actions-gap: 2px;
 }
 ```
 
-### Light Theme Example
+### Built-in Light Theme
+
+The light theme above is **included in the library's stylesheet** — setting `data-theme="light"` on an ancestor is all you need. To create a fully custom theme, override any `--ptl-*` variable on your own selector:
 
 ```css
-[data-theme="light"] {
-  --ptl-bg-color: #ffffff;
-  --ptl-tab-bar-bg: #f3f3f3;
-  --ptl-tab-bg: #ececec;
-  --ptl-tab-hover-bg: #e8e8e8;
-  --ptl-tab-active-bg: #ffffff;
-  --ptl-text-color: #333333;
-  --ptl-tab-text: #666666;
-  --ptl-tab-active-text: #333333;
-  --ptl-border-color: #e0e0e0;
-  --ptl-drag-over-bg: rgba(0, 122, 204, 0.05);
-  --ptl-scrollbar-thumb: #c1c1c1;
+/* Example: custom brand theme */
+[data-theme="brand"] {
+  --ptl-bg-color: #faf9f7;
+  --ptl-tab-bar-bg: #edecea;
+  --ptl-tab-active-border: #e05d00;
+  /* ... override as many or as few variables as needed */
 }
 ```
 

@@ -23,6 +23,7 @@ export type {
   DropZoneInfo,
   LayoutContextValue,
   LinkInterceptionMode,
+  RenderTabProps,
   PaneTabsLayoutProps,
   TabProps,
   PaneProps,

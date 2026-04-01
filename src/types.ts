@@ -1,6 +1,24 @@
 import { ReactNode } from 'react';
 
 /**
+ * Props passed to a custom tab render function (TabData.renderTab).
+ * The outer tab wrapper (drag handlers, click, ARIA attributes) is always
+ * managed by the library — renderTab only controls the *inner* content.
+ */
+export interface RenderTabProps {
+  /** The full tab data object */
+  tab: TabData;
+  /** Whether this tab is the active (selected) tab in its pane */
+  isActive: boolean;
+  /** Whether this tab is currently pinned */
+  isPinned: boolean;
+  /** Whether this tab is currently being dragged */
+  isDragging: boolean;
+  /** The default inner content (icon + title + tabExtra + pin/close buttons) for composition */
+  defaultTab: ReactNode;
+}
+
+/**
  * Unique identifier for tabs and panes
  */
 export type Id = string;
@@ -30,6 +48,30 @@ export interface TabData {
   pinned?: boolean;
   /** Additional data associated with the tab */
   data?: Record<string, unknown>;
+  /**
+   * Extra content rendered inside the tab header, after the title and before
+   * the pin/close buttons. Ideal for badges, status dots, or small action buttons.
+   */
+  tabExtra?: ReactNode;
+  /**
+   * Custom render function for the tab header's inner content.
+   * Receives the current state and the default inner content (`defaultTab`)
+   * for easy composition (wrap, decorate, or fully replace).
+   *
+   * The outer interactive wrapper (drag, click, ARIA) is always library-managed,
+   * so drag-and-drop and pinning remain intact.
+   *
+   * @example
+   * ```tsx
+   * renderTab: ({ defaultTab, isActive }) => (
+   *   <div style={{ display: 'flex', flexDirection: 'column' }}>
+   *     {defaultTab}
+   *     {isActive && <span className="tab-subtitle">editing</span>}
+   *   </div>
+   * )
+   * ```
+   */
+  renderTab?: (props: RenderTabProps) => ReactNode;
 }
 
 /**
@@ -186,6 +228,11 @@ export interface LayoutContextValue {
   pinTab: (paneId: Id, tabId: Id) => void;
   /** Unpin a tab (moves it to the start of the unpinned group in the pane) */
   unpinTab: (paneId: Id, tabId: Id) => void;
+  /**
+   * Optional callback to render extra toolbar actions in a pane's tab bar
+   * (to the right of the tabs, before the maximize button).
+   */
+  tabBarActions?: (paneId: Id, pane: PaneConfig) => ReactNode;
 }
 
 /**
@@ -231,6 +278,20 @@ export interface PaneTabsLayoutProps {
    * - 'none': No link interception at all
    */
   linkInterception?: LinkInterceptionMode;
+  /**
+   * Render extra toolbar actions in a pane's tab bar, to the right of the tabs
+   * and to the left of the maximize button. Called once per visible pane.
+   *
+   * @example
+   * ```tsx
+   * tabBarActions={(paneId, pane) =>
+   *   paneId === 'editor-pane'
+   *     ? <button onClick={runCode}>▶ Run</button>
+   *     : null
+   * }
+   * ```
+   */
+  tabBarActions?: (paneId: Id, pane: PaneConfig) => ReactNode;
   /** Additional CSS class */
   className?: string;
   /** Inline styles */

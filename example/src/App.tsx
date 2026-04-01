@@ -1,5 +1,5 @@
-import { PaneTabsLayout, PaneLink, type TabData, type LayoutConfig } from 'pane-tabs-layout';
-import { useState, useCallback } from 'react';
+import { PaneTabsLayout, PaneLink, type TabData, type LayoutConfig, type RenderTabProps } from 'pane-tabs-layout';
+import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import './App.css';
 
 // ---------- Dynamic content components for link-opened tabs ----------
@@ -178,23 +178,38 @@ const TestCasesContent = () => (
   </div>
 );
 
-// Initial tabs data with console tabs having different data
+// ---------- Level 3 demo: renderTab for the Code tab ----------
+// Shows a language subtitle below the title when the tab is active.
+const codeTabRenderer = ({ defaultTab, isActive }: RenderTabProps) => (
+  <div className="custom-code-tab">
+    {defaultTab}
+    {isActive && <span className="tab-subtitle">JavaScript</span>}
+  </div>
+);
+
+// Initial tabs data — showcases Level 1 (tabExtra) and Level 3 (renderTab)
 const initialTabs: TabData[] = [
   {
     id: 'problem',
-    title: 'Problem',
+    title: 'Two Sum',
     content: <ProblemContent />,
     closable: false,
+    // Level 1: tabExtra — difficulty badge
+    tabExtra: <span className="badge badge-easy">Easy</span>,
   },
   {
     id: 'code',
-    title: 'Code',
+    title: 'main.js',
     content: <CodeContent />,
     closable: false,
+    // Level 1: tabExtra — modified dot
+    tabExtra: <span className="modified-dot" title="Unsaved changes" />,
+    // Level 3: renderTab — language subtitle when active
+    renderTab: codeTabRenderer,
   },
   {
     id: 'console-success',
-    title: 'Console (Success)',
+    title: 'Run #001',
     content: (
       <ConsoleContent
         runId="run-success-001"
@@ -209,10 +224,12 @@ const initialTabs: TabData[] = [
       status: 'success',
       jobType: 'test',
     } as ConsoleData,
+    // Level 1: tabExtra — green status dot
+    tabExtra: <span className="status-dot status-success" title="Passed" />,
   },
   {
     id: 'console-failure',
-    title: 'Console (Failure)',
+    title: 'Run #002',
     content: (
       <ConsoleContent
         runId="run-failure-002"
@@ -227,6 +244,8 @@ const initialTabs: TabData[] = [
       status: 'failure',
       jobType: 'test',
     } as ConsoleData,
+    // Level 1: tabExtra — red status dot
+    tabExtra: <span className="status-dot status-failure" title="Failed" />,
   },
   {
     id: 'notes',
@@ -238,12 +257,16 @@ const initialTabs: TabData[] = [
       author: 'john_doe',
       createdAt: '2024-01-15',
     },
+    // Level 1: tabExtra — item count badge
+    tabExtra: <span className="badge badge-count">3</span>,
   },
   {
     id: 'tests',
     title: 'Test Cases',
     content: <TestCasesContent />,
     closable: true,
+    // Level 1: tabExtra — pass/fail summary
+    tabExtra: <span className="badge badge-tests">2/2</span>,
   },
 ];
 
@@ -267,7 +290,24 @@ const initialLayout: LayoutConfig = {
   ],
 };
 
+// ---------- System theme detection ----------
+const darkQuery =
+  typeof window !== 'undefined'
+    ? window.matchMedia('(prefers-color-scheme: dark)')
+    : null;
+
+/** Subscribe to system theme changes and return 'dark' or 'light'. */
+function useSystemTheme(): 'dark' | 'light' {
+  const subscribe = useCallback((cb: () => void) => {
+    darkQuery?.addEventListener('change', cb);
+    return () => darkQuery?.removeEventListener('change', cb);
+  }, []);
+  const getSnapshot = useCallback(() => (darkQuery?.matches !== false ? 'dark' : 'light'), []);
+  return useSyncExternalStore(subscribe, getSnapshot, () => 'dark');
+}
+
 function App() {
+  const theme = useSystemTheme();
   const [layout, setLayout] = useState<LayoutConfig>(initialLayout);
 
   const handleLayoutChange = useCallback((newLayout: LayoutConfig) => {
@@ -310,11 +350,49 @@ function App() {
     return null;
   }, []);
 
+  // Level 2: tabBarActions — pane-level toolbar buttons
+  const handleTabBarActions = useCallback((paneId: string) => {
+    if (paneId === 'left-pane') {
+      return (
+        <div className="toolbar-actions">
+          <button
+            className="toolbar-btn toolbar-btn-primary"
+            onClick={() => alert('Running code...')}
+            title="Run code"
+          >
+            ▶ Run
+          </button>
+          <button
+            className="toolbar-btn"
+            onClick={() => alert('Formatting code...')}
+            title="Format code"
+          >
+            ✦ Format
+          </button>
+        </div>
+      );
+    }
+    if (paneId === 'right-pane') {
+      return (
+        <div className="toolbar-actions">
+          <button
+            className="toolbar-btn"
+            onClick={() => alert('Clearing console output...')}
+            title="Clear console"
+          >
+            ⌫ Clear
+          </button>
+        </div>
+      );
+    }
+    return null;
+  }, []);
+
   return (
-    <div className="app-container">
+    <div className="app-container" data-theme={theme}>
       <header className="app-header">
         <h1>🚀 Pane Tabs Layout Demo</h1>
-        <p>Drag tabs to split panes! Try dragging to the edges of a pane. Click links inside tabs to open new tabs!</p>
+        <p>Showcasing custom tab headers, toolbar actions, and full tab rendering control.</p>
       </header>
       
       <main className="app-main">
@@ -323,14 +401,21 @@ function App() {
           initialTabs={initialTabs}
           onLayoutChange={handleLayoutChange}
           onOpenLink={handleOpenLink}
+          tabBarActions={handleTabBarActions}
           className="demo-layout"
         />
       </main>
       
       <footer className="app-footer">
         <p>
-          <strong>Try it:</strong> Drag tabs between panes, or drag to the <strong>edges</strong> of a pane to create new splits!
-          Click links in the Problem tab to open new tabs dynamically. Close tabs with the × button.
+          <strong>🧩 Custom Headers:</strong>{' '}
+          <span className="demo-badge badge badge-easy">Easy</span> difficulty badge,{' '}
+          <span className="demo-badge status-dot status-success" /> status dots,{' '}
+          <span className="demo-badge modified-dot" /> modified indicator,{' '}
+          <span className="demo-badge badge badge-count">3</span> count badges &mdash;{' '}
+          all via <code>tabExtra</code>.{' '}
+          Toolbar buttons (<strong>▶ Run</strong>, <strong>✦ Format</strong>, <strong>⌫ Clear</strong>) via <code>tabBarActions</code>.{' '}
+          The <strong>main.js</strong> tab shows a language subtitle via <code>renderTab</code>.
         </p>
       </footer>
     </div>
