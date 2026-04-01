@@ -26,6 +26,7 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
     restorePane,
     pinTab,
     unpinTab,
+    tabBarActions,
   } = useLayout();
   const isMaximized = maximizedPaneId === paneId;
   const [isDragOver, setIsDragOver] = useState(false);
@@ -471,12 +472,14 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                 dragOverIndex === paneTabs.length && (
                   <div className="ptl-drop-indicator" />
                 )}
-              <button
-                className="ptl-maximize-btn"
-                onClick={handleMaximizeToggle}
-                title={isMaximized ? "Restore pane" : "Maximize pane"}
-                aria-label={isMaximized ? "Restore pane" : "Maximize pane"}
-              >
+              <div className="ptl-tab-bar-right">
+                {tabBarActions && pane && tabBarActions(paneId, pane)}
+                <button
+                  className="ptl-maximize-btn"
+                  onClick={handleMaximizeToggle}
+                  title={isMaximized ? "Restore pane" : "Maximize pane"}
+                  aria-label={isMaximized ? "Restore pane" : "Maximize pane"}
+                >
                 {isMaximized ? (
                   <svg
                     xmlns="http://www.w3.org"
@@ -506,7 +509,8 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                     <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
                   </svg>
                 )}
-              </button>
+                </button>
+              </div>
             </div>
             <div className="ptl-pane-content" onClick={handleContentClick}>
               {activeTabData ? (

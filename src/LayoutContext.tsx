@@ -20,6 +20,7 @@ interface LayoutProviderProps {
   onTabsChange?: (tabs: TabData[]) => void;
   onOpenLink?: (url: string) => TabData | null;
   linkInterception?: LinkInterceptionMode;
+  tabBarActions?: (paneId: Id, pane: PaneConfig) => React.ReactNode;
 }
 
 const LayoutContext = createContext<LayoutContextValue | null>(null);
@@ -196,6 +197,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
   onTabsChange,
   onOpenLink: onOpenLinkProp,
   linkInterception: linkInterceptionProp = 'auto',
+  tabBarActions: tabBarActionsProp,
 }) => {
   // Initialize tabs map
   const [tabsMap, setTabsMap] = useState<Map<Id, TabData>>(() => {
@@ -769,6 +771,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
   );
 
   const linkInterception = linkInterceptionProp;
+  const tabBarActions = tabBarActionsProp;
 
   const value = useMemo(
     () => ({
@@ -793,8 +796,9 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       restorePane,
       pinTab,
       unpinTab,
+      tabBarActions,
     }),
-    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone, updateNodeSizes, maximizedPaneId, maximizePane, restorePane, pinTab, unpinTab]
+    [tabsMap, panesMap, rootNode, moveTab, splitPane, activateTab, closeTab, addTab, removePane, openLink, linkInterception, dragData, dropZone, updateNodeSizes, maximizedPaneId, maximizePane, restorePane, pinTab, unpinTab, tabBarActions]
   );
 
   return (

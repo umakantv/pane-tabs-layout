@@ -162,3 +162,282 @@ html, body, #root {
 .test-case strong {
   color: #9cdcfe;
 }
+
+/* ============================================
+   Custom Tab Header Demo Styles
+   ============================================ */
+
+/* --- Level 1: tabExtra — badges, dots, indicators --- */
+
+/* Generic badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+/* Difficulty badge (green) */
+.badge-easy {
+  background-color: #2ea043;
+  color: #ffffff;
+}
+
+/* Item count badge */
+.badge-count {
+  background-color: #007acc;
+  color: #ffffff;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* Test result badge */
+.badge-tests {
+  background-color: #2ea043;
+  color: #ffffff;
+}
+
+/* Modified dot (white filled circle) */
+.modified-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #cccccc;
+  flex-shrink: 0;
+}
+
+/* Status dot */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-success {
+  background-color: #4ec9b0;
+}
+
+.status-failure {
+  background-color: #f48771;
+}
+
+/* --- Level 2: tabBarActions — toolbar buttons --- */
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid #3c3c3c;
+  border-radius: 4px;
+  background-color: transparent;
+  color: #cccccc;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.toolbar-btn:hover {
+  background-color: #2a2d2e;
+  border-color: #555555;
+}
+
+.toolbar-btn-primary {
+  background-color: #2ea04333;
+  border-color: #2ea043;
+  color: #4ec9b0;
+}
+
+.toolbar-btn-primary:hover {
+  background-color: #2ea04366;
+}
+
+/* --- Level 3: renderTab — custom code tab --- */
+
+.custom-code-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* inherit the parent flex layout for the default content row */
+}
+
+/* The default tab content row (icon + title + extra + buttons) */
+.custom-code-tab > :first-child {
+  display: contents;
+}
+
+.tab-subtitle {
+  font-size: 10px;
+  color: #969696;
+  opacity: 0.8;
+  margin-top: -2px;
+  line-height: 1;
+}
+
+/* --- Footer demo badges (inline preview) --- */
+
+.demo-badge {
+  vertical-align: middle;
+  margin: 0 2px;
+}
+
+/* Footer code tag */
+.app-footer code {
+  background-color: #2d2d2d;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+
+/* ============================================
+   Light Theme — app-specific overrides
+   The library's own [data-theme="light"] rule
+   handles all --ptl-* variables automatically.
+   Here we only restyle the demo app's own
+   elements (header, footer, content panels,
+   badges, toolbar buttons).
+   ============================================ */
+
+[data-theme="light"].app-container {
+  background-color: #f5f5f5;
+  color: #333333;
+}
+
+/* Header */
+[data-theme="light"] .app-header {
+  background-color: #ffffff;
+  border-bottom-color: #e0e0e0;
+}
+
+[data-theme="light"] .app-header h1 {
+  color: #1a1a1a;
+}
+
+[data-theme="light"] .app-header p {
+  color: #666666;
+}
+
+/* Footer */
+[data-theme="light"] .app-footer {
+  background-color: #ffffff;
+  border-top-color: #e0e0e0;
+}
+
+[data-theme="light"] .app-footer p {
+  color: #666666;
+}
+
+[data-theme="light"] .app-footer code {
+  background-color: #e8e8e8;
+  color: #333333;
+}
+
+/* Content panels */
+[data-theme="light"] .content-panel h2 {
+  color: #1a1a1a;
+}
+
+[data-theme="light"] .content-panel h3 {
+  color: #333333;
+}
+
+[data-theme="light"] .content-panel code {
+  background-color: #e8e8e8;
+  color: #333333;
+}
+
+[data-theme="light"] .content-panel pre {
+  background-color: #f0f0f0;
+  color: #333333;
+}
+
+[data-theme="light"] .content-panel a {
+  color: #0066cc;
+}
+
+/* Code panel */
+[data-theme="light"] .code-panel pre {
+  background-color: #fafafa;
+  border-color: #e0e0e0;
+  color: #333333;
+}
+
+/* Console panel */
+[data-theme="light"] .console-line.success {
+  color: #1a7f37;
+}
+
+[data-theme="light"] .console-line.error {
+  color: #cf222e;
+}
+
+[data-theme="light"] .console-prompt {
+  color: #0066cc;
+}
+
+/* Test cases */
+[data-theme="light"] .test-case {
+  background-color: #f0f0f0;
+}
+
+[data-theme="light"] .test-case strong {
+  color: #0550ae;
+}
+
+/* Modified dot — darker so it shows on light backgrounds */
+[data-theme="light"] .modified-dot {
+  background-color: #666666;
+}
+
+/* Status dots — slightly darker for contrast */
+[data-theme="light"] .status-success {
+  background-color: #1a7f37;
+}
+
+[data-theme="light"] .status-failure {
+  background-color: #cf222e;
+}
+
+/* Toolbar buttons */
+[data-theme="light"] .toolbar-btn {
+  border-color: #d0d0d0;
+  color: #333333;
+}
+
+[data-theme="light"] .toolbar-btn:hover {
+  background-color: #e8e8e8;
+  border-color: #aaaaaa;
+}
+
+[data-theme="light"] .toolbar-btn-primary {
+  background-color: #dafbe1;
+  border-color: #1a7f37;
+  color: #1a7f37;
+}
+
+[data-theme="light"] .toolbar-btn-primary:hover {
+  background-color: #aceebb;
+}
+
+/* renderTab subtitle */
+[data-theme="light"] .tab-subtitle {
+  color: #888888;
+}

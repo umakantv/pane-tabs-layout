@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import type { TabProps } from './types';
 
 export const Tab: React.FC<TabProps> = ({
@@ -53,20 +53,12 @@ export const Tab: React.FC<TabProps> = ({
 
   const draggable = tab.draggable !== false;
 
-  return (
-    <div
-      className={`ptl-tab ${isActive ? 'ptl-tab-active' : ''} ${isDragging ? 'ptl-tab-dragging' : ''} ${isPinned ? 'ptl-tab-pinned' : ''}`}
-      onClick={onClick}
-      draggable={draggable}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      role="tab"
-      aria-selected={isActive}
-      data-tab-id={tab.id}
-      data-pinned={isPinned || undefined}
-    >
+  // --- Build the default inner content (icon + title + tabExtra + pin + close) ---
+  const defaultTabContent = useMemo(() => (
+    <>
       {tab.icon && <span className="ptl-tab-icon">{tab.icon}</span>}
       <span className="ptl-tab-title">{tab.title}</span>
+      {tab.tabExtra && <span className="ptl-tab-extra">{tab.tabExtra}</span>}
       {/* Pin toggle — visible on hover for every tab */}
       <button
         className="ptl-tab-pin"
@@ -107,6 +99,27 @@ export const Tab: React.FC<TabProps> = ({
           </svg>
         </button>
       )}
+    </>
+  ), [tab.icon, tab.title, tab.tabExtra, tab.closable, isPinned, onClose, handleClose, handlePinToggle]);
+
+  // --- If renderTab is provided, let the user control the inner content ---
+  const innerContent = tab.renderTab
+    ? tab.renderTab({ tab, isActive, isPinned, isDragging, defaultTab: defaultTabContent })
+    : defaultTabContent;
+
+  return (
+    <div
+      className={`ptl-tab ${isActive ? 'ptl-tab-active' : ''} ${isDragging ? 'ptl-tab-dragging' : ''} ${isPinned ? 'ptl-tab-pinned' : ''}`}
+      onClick={onClick}
+      draggable={draggable}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      role="tab"
+      aria-selected={isActive}
+      data-tab-id={tab.id}
+      data-pinned={isPinned || undefined}
+    >
+      {innerContent}
     </div>
   );
 };
