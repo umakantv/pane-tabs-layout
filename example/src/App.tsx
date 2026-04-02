@@ -1,6 +1,45 @@
 import { PaneTabsLayout, PaneLink, type TabData, type LayoutConfig, type RenderTabProps } from 'pane-tabs-layout';
-import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useState, useCallback, useSyncExternalStore, useRef } from 'react';
 import './App.css';
+
+// ---------- Dirty State Demo: Editable Content with onBeforeClose ----------
+
+interface EditableContentProps {
+  initialContent: string;
+  onDirtyChange: (isDirty: boolean) => void;
+}
+
+const EditableContent = ({ initialContent, onDirtyChange }: EditableContentProps) => {
+  const [content, setContent] = useState(initialContent);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value;
+    setContent(newContent);
+    onDirtyChange(newContent !== initialContent);
+  };
+
+  const handleReset = () => {
+    setContent(initialContent);
+    onDirtyChange(false);
+  };
+
+  return (
+    <div className="content-panel editor-panel">
+      <div className="editor-toolbar">
+        <span className="editor-label">Editable Demo (try closing with unsaved changes)</span>
+        <button className="toolbar-btn" onClick={handleReset}>Reset</button>
+      </div>
+      <textarea
+        ref={textareaRef}
+        className="editor-textarea"
+        value={content}
+        onChange={handleChange}
+        spellCheck={false}
+      />
+    </div>
+  );
+};
 
 // ---------- Dynamic content components for link-opened tabs ----------
 
@@ -187,89 +226,6 @@ const codeTabRenderer = ({ defaultTab, isActive }: RenderTabProps) => (
   </div>
 );
 
-// Initial tabs data — showcases Level 1 (tabExtra) and Level 3 (renderTab)
-const initialTabs: TabData[] = [
-  {
-    id: 'problem',
-    title: 'Two Sum',
-    content: <ProblemContent />,
-    closable: false,
-    // Level 1: tabExtra — difficulty badge
-    tabExtra: <span className="badge badge-easy">Easy</span>,
-  },
-  {
-    id: 'code',
-    title: 'main.js',
-    content: <CodeContent />,
-    closable: false,
-    // Level 1: tabExtra — modified dot
-    tabExtra: <span className="modified-dot" title="Unsaved changes" />,
-    // Level 3: renderTab — language subtitle when active
-    renderTab: codeTabRenderer,
-  },
-  {
-    id: 'console-success',
-    title: 'Run #001',
-    content: (
-      <ConsoleContent
-        runId="run-success-001"
-        status="success"
-        startedAt="2024-01-15T10:30:00Z"
-        completedAt="2024-01-15T10:30:05Z"
-      />
-    ),
-    closable: true,
-    data: {
-      runId: 'run-success-001',
-      status: 'success',
-      jobType: 'test',
-    } as ConsoleData,
-    // Level 1: tabExtra — green status dot
-    tabExtra: <span className="status-dot status-success" title="Passed" />,
-  },
-  {
-    id: 'console-failure',
-    title: 'Run #002',
-    content: (
-      <ConsoleContent
-        runId="run-failure-002"
-        status="failure"
-        startedAt="2024-01-15T10:35:00Z"
-        completedAt="2024-01-15T10:35:03Z"
-      />
-    ),
-    closable: true,
-    data: {
-      runId: 'run-failure-002',
-      status: 'failure',
-      jobType: 'test',
-    } as ConsoleData,
-    // Level 1: tabExtra — red status dot
-    tabExtra: <span className="status-dot status-failure" title="Failed" />,
-  },
-  {
-    id: 'notes',
-    title: 'Notes',
-    content: <NotesContent />,
-    closable: true,
-    data: {
-      noteId: 'note-123',
-      author: 'john_doe',
-      createdAt: '2024-01-15',
-    },
-    // Level 1: tabExtra — item count badge
-    tabExtra: <span className="badge badge-count">3</span>,
-  },
-  {
-    id: 'tests',
-    title: 'Test Cases',
-    content: <TestCasesContent />,
-    closable: true,
-    // Level 1: tabExtra — pass/fail summary
-    tabExtra: <span className="badge badge-tests">2/2</span>,
-  },
-];
-
 // Initial layout configuration (legacy format - will be converted to tree internally)
 const initialLayout: LayoutConfig = {
   vertical: false,
@@ -277,7 +233,7 @@ const initialLayout: LayoutConfig = {
   panes: [
     {
       id: 'left-pane',
-      tabs: ['problem', 'code'],
+      tabs: ['problem', 'code', 'editor-demo'],
       activeTab: 'problem',
       minSize: 200,
     },
@@ -309,6 +265,107 @@ function useSystemTheme(): 'dark' | 'light' {
 function App() {
   const theme = useSystemTheme();
   const [layout, setLayout] = useState<LayoutConfig>(initialLayout);
+  
+  // Track dirty state for the editable demo tab using ref to avoid stale closures
+  const isDirtyMapRef = useRef<Record<string, boolean>>({});
+  
+  const setDirty = useCallback((tabId: string, isDirty: boolean) => {
+    isDirtyMapRef.current[tabId] = isDirty;
+    // Force re-render to update tabExtra (visual indicator)
+    setDirtyVersion(v => v + 1);
+  }, []);
+  
+  // Used to trigger re-renders for visual indicator updates
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_dirtyVersion, setDirtyVersion] = useState(0);
+
+  // Build tabs array with dynamic onBeforeClose callbacks
+  const tabs: TabData[] = [
+    {
+      id: 'problem',
+      title: 'Two Sum',
+      content: <ProblemContent />,
+      closable: false,
+      tabExtra: <span className="badge badge-easy">Easy</span>,
+    },
+    {
+      id: 'code',
+      title: 'main.js',
+      content: <CodeContent />,
+      closable: false,
+      tabExtra: <span className="modified-dot" title="Unsaved changes" />,
+      renderTab: codeTabRenderer,
+    },
+    {
+      id: 'editor-demo',
+      title: 'Editor Demo',
+      content: (
+        <EditableContent
+          initialContent={`// Try editing this content, then close the tab\n// You'll see a confirmation dialog!\n\nfunction example() {\n  return 'Hello, World!';\n}`}
+          onDirtyChange={(isDirty) => setDirty('editor-demo', isDirty)}
+        />
+      ),
+      closable: true,
+      // Visual indicator for dirty state (reads from ref, re-renders via dirtyVersion)
+      tabExtra: isDirtyMapRef.current['editor-demo'] ? (
+        <span className="modified-dot" title="Unsaved changes" />
+      ) : null,
+      // Tab-level onBeforeClose: confirmation dialog for dirty state
+      // Uses ref to always get current value (avoids stale closure)
+      onBeforeClose: async () => {
+        if (isDirtyMapRef.current['editor-demo']) {
+          // Use native confirm for demo purposes
+          return confirm('You have unsaved changes in Editor Demo. Close anyway?');
+        }
+        return true;
+      },
+    },
+    {
+      id: 'console-success',
+      title: 'Run #001',
+      content: (
+        <ConsoleContent
+          runId="run-success-001"
+          status="success"
+          startedAt="2024-01-15T10:30:00Z"
+          completedAt="2024-01-15T10:30:05Z"
+        />
+      ),
+      closable: true,
+      data: { runId: 'run-success-001', status: 'success', jobType: 'test', startedAt: '2024-01-15T10:30:00Z' } as ConsoleData,
+      tabExtra: <span className="status-dot status-success" title="Passed" />,
+    },
+    {
+      id: 'console-failure',
+      title: 'Run #002',
+      content: (
+        <ConsoleContent
+          runId="run-failure-002"
+          status="failure"
+          startedAt="2024-01-15T10:35:00Z"
+          completedAt="2024-01-15T10:35:03Z"
+        />
+      ),
+      closable: true,
+      data: { runId: 'run-failure-002', status: 'failure', jobType: 'test', startedAt: '2024-01-15T10:35:00Z' } as ConsoleData,
+      tabExtra: <span className="status-dot status-failure" title="Failed" />,
+    },
+    {
+      id: 'notes',
+      title: 'Notes',
+      content: <NotesContent />,
+      closable: true,
+      data: { noteId: 'note-123', author: 'john_doe', createdAt: '2024-01-15' },
+      tabExtra: <span className="badge badge-count">3</span>,
+    },
+    {
+      id: 'tests',
+      title: 'Test Cases',
+      content: <TestCasesContent />,
+      closable: true,
+      tabExtra: <span className="badge badge-tests">2/2</span>,
+    },
+  ];
 
   const handleLayoutChange = useCallback((newLayout: LayoutConfig) => {
     console.log('Layout changed:', newLayout);
@@ -348,6 +405,19 @@ function App() {
 
     // Not a handled URL — return null to let default browser behavior happen
     return null;
+  }, []);
+
+  /**
+   * Global onBeforeCloseTab: demonstrates app-wide dirty state checking.
+   * This is called after tab-level onBeforeClose (if provided).
+   */
+  const handleBeforeCloseTab = useCallback(async (tabId: string, _paneId: string, tab: TabData): Promise<boolean> => {
+    // This is a global fallback - individual tabs can have their own onBeforeClose
+    // For demo purposes, we only show additional confirmation for console tabs
+    if (tabId.startsWith('console-') && tab.data?.status === 'running') {
+      return confirm('This console tab is still running. Close anyway?');
+    }
+    return true;
   }, []);
 
   // Level 2: tabBarActions — pane-level toolbar buttons
@@ -398,10 +468,11 @@ function App() {
       <main className="app-main">
         <PaneTabsLayout
           initialLayout={layout}
-          initialTabs={initialTabs}
+          initialTabs={tabs}
           onLayoutChange={handleLayoutChange}
           onOpenLink={handleOpenLink}
           tabBarActions={handleTabBarActions}
+          onBeforeCloseTab={handleBeforeCloseTab}
           className="demo-layout"
         />
       </main>
@@ -416,6 +487,11 @@ function App() {
           all via <code>tabExtra</code>.{' '}
           Toolbar buttons (<strong>▶ Run</strong>, <strong>✦ Format</strong>, <strong>⌫ Clear</strong>) via <code>tabBarActions</code>.{' '}
           The <strong>main.js</strong> tab shows a language subtitle via <code>renderTab</code>.
+        </p>
+        <p style={{ marginTop: '0.5rem' }}>
+          <strong>🛡️ Dirty State Protection:</strong>{' '}
+          The <strong>Editor Demo</strong> tab uses <code>onBeforeClose</code> to show a confirmation dialog when closing with unsaved changes.{' '}
+          Try editing the text, then close the tab!
         </p>
       </footer>
     </div>

@@ -163,6 +163,7 @@ export const PaneTabsLayout: React.FC<PaneTabsLayoutProps> = ({
   onOpenLink,
   linkInterception,
   tabBarActions,
+  onBeforeCloseTab,
   className = '',
   style,
 }) => {
@@ -175,6 +176,7 @@ export const PaneTabsLayout: React.FC<PaneTabsLayoutProps> = ({
       onOpenLink={onOpenLink}
       linkInterception={linkInterception}
       tabBarActions={tabBarActions}
+      onBeforeCloseTab={onBeforeCloseTab}
     >
       <LayoutContent
         className={className}

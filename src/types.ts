@@ -72,6 +72,31 @@ export interface TabData {
    * ```
    */
   renderTab?: (props: RenderTabProps) => ReactNode;
+  /**
+   * Callback invoked before the tab is closed. Return `false` or a Promise
+   * that resolves to `false` to prevent the tab from closing. Useful for
+   * dirty-state confirmation dialogs.
+   *
+   * Called before the global `onBeforeCloseTab` (if provided). If this callback
+   * returns/prevents close, the global callback is not invoked.
+   *
+   * @example
+   * ```tsx
+   * {
+   *   id: 'editor',
+   *   title: 'main.js',
+   *   content: <Editor />,
+   *   onBeforeClose: async () => {
+   *     if (hasUnsavedChanges) {
+   *       const confirmed = await showConfirmDialog('Save changes?');
+   *       return confirmed; // false = prevent close
+   *     }
+   *     return true;
+   *   },
+   * }
+   * ```
+   */
+  onBeforeClose?: () => boolean | Promise<boolean>;
 }
 
 /**
@@ -292,6 +317,27 @@ export interface PaneTabsLayoutProps {
    * ```
    */
   tabBarActions?: (paneId: Id, pane: PaneConfig) => ReactNode;
+  /**
+   * Global callback invoked before any tab is closed. Return `false` or a
+   * Promise that resolves to `false` to prevent the tab from closing.
+   *
+   * This is called after the tab-level `onBeforeClose` (if provided) only if
+   * the tab-level callback allows the close. Use this for consistent app-wide
+   * confirmation dialogs.
+   *
+   * @example
+   * ```tsx
+   * <PaneTabsLayout
+   *   onBeforeCloseTab={async (tabId, paneId, tab) => {
+   *     if (tab.data?.isDirty) {
+   *       return await showConfirmDialog(`Save ${tab.title}?`);
+   *     }
+   *     return true;
+   *   }}
+   * />
+   * ```
+   */
+  onBeforeCloseTab?: (tabId: Id, paneId: Id, tab: TabData) => boolean | Promise<boolean>;
   /** Additional CSS class */
   className?: string;
   /** Inline styles */

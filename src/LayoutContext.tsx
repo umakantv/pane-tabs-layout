@@ -21,6 +21,7 @@ interface LayoutProviderProps {
   onOpenLink?: (url: string) => TabData | null;
   linkInterception?: LinkInterceptionMode;
   tabBarActions?: (paneId: Id, pane: PaneConfig) => React.ReactNode;
+  onBeforeCloseTab?: (tabId: Id, paneId: Id, tab: TabData) => boolean | Promise<boolean>;
 }
 
 const LayoutContext = createContext<LayoutContextValue | null>(null);
@@ -198,6 +199,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
   onOpenLink: onOpenLinkProp,
   linkInterception: linkInterceptionProp = 'auto',
   tabBarActions: tabBarActionsProp,
+  onBeforeCloseTab: onBeforeCloseTabProp,
 }) => {
   // Initialize tabs map
   const [tabsMap, setTabsMap] = useState<Map<Id, TabData>>(() => {
@@ -598,7 +600,32 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
   );
 
   const closeTab = useCallback(
-    (paneId: Id, tabId: Id) => {
+    async (paneId: Id, tabId: Id) => {
+      const tab = tabsMap.get(tabId);
+      if (!tab) return;
+
+      // Check tab-level onBeforeClose first
+      if (tab.onBeforeClose) {
+        try {
+          const allowed = await tab.onBeforeClose();
+          if (!allowed) return;
+        } catch {
+          // If callback throws, prevent close
+          return;
+        }
+      }
+
+      // Check global onBeforeCloseTab second
+      if (onBeforeCloseTabProp) {
+        try {
+          const allowed = await onBeforeCloseTabProp(tabId, paneId, tab);
+          if (!allowed) return;
+        } catch {
+          // If callback throws, prevent close
+          return;
+        }
+      }
+
       setRootNode((prevRoot) => {
         const newRoot = updatePaneInTree(prevRoot, paneId, (pane) => {
           const newTabs = (pane.tabs || []).filter((id) => id !== tabId);
@@ -620,7 +647,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({
       });
       setTimeout(notifyChanges, 0);
     },
-    [notifyChanges, updatePaneInTree, removeNodeFromTree]
+    [notifyChanges, updatePaneInTree, removeNodeFromTree, tabsMap, onBeforeCloseTabProp]
   );
 
   const addTab = useCallback(

@@ -216,6 +216,89 @@ The outer tab wrapper (drag handlers, click, ARIA attributes, CSS classes) is al
 
 **Composition with `defaultTab`:** Wrap `defaultTab` to add decorations while keeping the built-in icon, title, `tabExtra`, pin/close buttons. Or ignore `defaultTab` entirely for a fully custom tab header.
 
+### Dirty State Confirmation (onBeforeClose)
+
+Prevent tabs from closing when they have unsaved changes using two levels of callbacks:
+
+#### Tab-Level: `onBeforeClose`
+
+Attach a callback directly to a tab for tab-specific close confirmation:
+
+```tsx
+const tabs: TabData[] = [
+  {
+    id: 'editor',
+    title: 'main.ts',
+    content: <CodeEditor />,
+    onBeforeClose: async () => {
+      if (hasUnsavedChanges) {
+        const confirmed = await showConfirmDialog('You have unsaved changes. Close anyway?');
+        return confirmed; // Return false to prevent closing
+      }
+      return true; // Allow close
+    },
+  },
+];
+```
+
+#### Global: `onBeforeCloseTab`
+
+Use a global handler for consistent app-wide confirmation dialogs:
+
+```tsx
+<PaneTabsLayout
+  initialLayout={layout}
+  initialTabs={tabs}
+  onBeforeCloseTab={async (tabId, paneId, tab) => {
+    // Check for dirty state in tab data
+    if (tab.data?.isDirty) {
+      const confirmed = await showCustomDialog(`Save changes to ${tab.title}?`);
+      return confirmed;
+    }
+    return true; // Allow close
+  }}
+/>
+```
+
+**Execution order:**
+1. Tab-level `onBeforeClose` is called first (if provided)
+2. If it allows close (returns `true`), global `onBeforeCloseTab` is called (if provided)
+3. Tab only closes if **both** callbacks allow it (or if neither is provided)
+
+**Key behaviors:**
+- Both callbacks can return `boolean` (synchronous) or `Promise<boolean>` (asynchronous)
+- Return/prevent close with `false` to stop the tab from closing
+- If a callback throws an error, the close is prevented (failsafe)
+- Works with all close triggers: close button, context menu, and programmatic `closeTab()`
+
+**Complete example with visual dirty indicator:**
+
+```tsx
+const [isDirty, setIsDirty] = useState(false);
+
+const tabs: TabData[] = [
+  {
+    id: 'editor',
+    title: 'main.ts',
+    content: <CodeEditor onChange={() => setIsDirty(true)} />,
+    // Visual indicator of unsaved changes
+    tabExtra: isDirty ? <span className="modified-dot" title="Unsaved changes" /> : null,
+    // Confirmation dialog when closing with unsaved changes
+    onBeforeClose: async () => {
+      if (isDirty) {
+        const save = await showConfirmDialog('Save changes before closing?');
+        if (save) {
+          await saveFile();
+          setIsDirty(false);
+        }
+        return true; // Close after saving (or discard)
+      }
+      return true; // No changes, allow close
+    },
+  },
+];
+```
+
 ### Tab Data & Metadata
 
 Attach any serializable data to tabs for dynamic content rendering:
@@ -268,6 +351,7 @@ The root component that manages the entire layout system.
 | `onOpenLink` | `(url: string) => TabData \| null` | ❌ | Link resolver — return a `TabData` to open the URL as a tab, or `null` for default browser behavior |
 | `linkInterception` | `'auto' \| 'manual' \| 'none'` | ❌ | Controls how `<a>` clicks inside content are intercepted (default: `'auto'`) |
 | `tabBarActions` | `(paneId: string, pane: PaneConfig) => ReactNode` | ❌ | Render extra toolbar actions in each pane's tab bar (right side, before maximize button) |
+| `onBeforeCloseTab` | `(tabId: string, paneId: string, tab: TabData) => boolean \| Promise<boolean>` | ❌ | Global callback invoked before any tab closes. Return `false` to prevent closing. |
 | `className` | `string` | ❌ | Additional CSS class for the container |
 | `style` | `React.CSSProperties` | ❌ | Inline styles for the container |
 
@@ -297,6 +381,8 @@ interface TabData {
   tabExtra?: ReactNode;
   /** Custom render function for the tab header inner content */
   renderTab?: (props: RenderTabProps) => ReactNode;
+  /** Callback invoked before closing the tab. Return false to prevent close. */
+  onBeforeClose?: () => boolean | Promise<boolean>;
 }
 ```
 

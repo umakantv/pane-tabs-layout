@@ -441,3 +441,62 @@ html, body, #root {
 [data-theme="light"] .tab-subtitle {
   color: #888888;
 }
+
+/* ============================================
+   Editor Demo Panel (onBeforeClose showcase)
+   ============================================ */
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  height: 100%;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background-color: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+.editor-label {
+  font-size: 12px;
+  color: #969696;
+}
+
+.editor-textarea {
+  flex: 1;
+  width: 100%;
+  padding: 16px;
+  border: none;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+}
+
+.editor-textarea:focus {
+  background-color: #1e1e1e;
+}
+
+/* Light theme for editor */
+[data-theme="light"] .editor-toolbar {
+  background-color: #f0f0f0;
+  border-bottom-color: #e0e0e0;
+}
+
+[data-theme="light"] .editor-label {
+  color: #666666;
+}
+
+[data-theme="light"] .editor-textarea {
+  background-color: #fafafa;
+  color: #333333;
+}

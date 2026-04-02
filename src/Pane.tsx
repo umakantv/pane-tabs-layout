@@ -455,7 +455,7 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                       isDragging={dragData?.tabId === tab.id}
                       isPinned={isPinned}
                       onClick={() => activateTab(pane.id, tab.id)}
-                      onClose={() => closeTab(pane.id, tab.id)}
+                      onClose={() => void closeTab(pane.id, tab.id)}
                       onPin={() => pinTab(pane.id, tab.id)}
                       onUnpin={() => unpinTab(pane.id, tab.id)}
                       onDragStart={() => handleTabDragStart(tab.id)}
@@ -555,7 +555,7 @@ export const Pane: React.FC<PaneProps> = ({ paneId, className }) => {
                         className="ptl-context-menu-item"
                         role="menuitem"
                         onClick={() => {
-                          closeTab(pane.id, contextMenu.tabId);
+                          void closeTab(pane.id, contextMenu.tabId);
                           setContextMenu(null);
                         }}
                       >
